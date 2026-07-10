@@ -11,6 +11,8 @@ export default function SettingsPage() {
     concurrency: 8,
     aiDefault: false,
     defaultPrompt: "",
+    autoIndexCheck: true,
+    autoIndexSubmit: false,
   });
   const [saved, setSaved] = useState(false);
 

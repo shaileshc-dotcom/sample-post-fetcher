@@ -28,7 +28,7 @@ export function toArticleCSV(articles: Article[]): string {
   const cols = ["title", "url", "publishedDate", "author", "category", "wordCount", "method"];
   const head = cols.join(",");
   const rows = articles.map((a) =>
-    cols.map((c) => csv(String((a as Record<string, unknown>)[c] ?? ""))).join(",")
+    cols.map((c) => csv(String((a as unknown as Record<string, unknown>)[c] ?? ""))).join(",")
   );
   return [head, ...rows].join("\r\n");
 }
