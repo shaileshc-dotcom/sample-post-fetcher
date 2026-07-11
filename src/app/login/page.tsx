@@ -80,7 +80,7 @@ export default function LoginPage() {
       <nav className="nav">
         <div className="brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-light.png" alt="GUESTPOSTLINKS" style={{ height: 26, width: "auto" }} />
+          <img src="/logo-light.png" alt="GUESTPOSTLINKS" className="brand-logo" />
         </div>
         <div className="nav-actions">
           <button className="nav-signin" onClick={() => openAuth("signin")}>Sign in</button>
@@ -90,12 +90,7 @@ export default function LoginPage() {
 
       {/* Hero */}
       <main className="hero">
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="hero-inner"
-        >
+        <div className="hero-inner">
           <div className="pill-eyebrow">◇ Internal Suite · Est. 2026</div>
           <h1 className="hero-title">
             <span className="grad-text">SCOUT. PLACE. INDEX.</span>
@@ -114,7 +109,7 @@ export default function LoginPage() {
             <button className="cta-primary" onClick={() => openAuth("signup")}>Get started</button>
             <button className="cta-ghost" onClick={() => openAuth("signin")}>Sign in →</button>
           </div>
-        </motion.div>
+        </div>
       </main>
 
       {/* Ticker */}
@@ -190,6 +185,7 @@ export default function LoginPage() {
 
         .nav { position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; }
         .brand { display: flex; align-items: center; gap: 10px; }
+        .brand-logo { height: 20px; width: auto; display: block; }
         .mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg,#f0b94e,#ff6b8a); color: #241300; font-weight: 700; font-size: 13px; }
         .brand-name { font-family: var(--font-display), sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
         .nav-actions { display: flex; align-items: center; gap: 10px; }
@@ -199,7 +195,8 @@ export default function LoginPage() {
         .nav-getstarted:hover { filter: brightness(1.06); }
 
         .hero { position: relative; z-index: 1; flex: 1; display: grid; place-items: center; text-align: center; padding: 0 24px; }
-        .hero-inner { max-width: 820px; }
+        .hero-inner { max-width: 820px; animation: heroIn 0.6s cubic-bezier(0.22,1,0.36,1) both; }
+        @keyframes heroIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
         .pill-eyebrow { display: inline-block; font-family: var(--font-mono), monospace; font-size: 10.5px; letter-spacing: 0.2em; color: #f0b94e; border: 1px solid rgba(240,185,78,0.3); border-radius: 999px; padding: 6px 14px; margin-bottom: 26px; }
         .hero-title { font-family: var(--font-display), sans-serif; font-weight: 700; line-height: 0.98; letter-spacing: -0.03em; margin: 0; display: flex; flex-direction: column; align-items: center; }
         .hero-title .grad-text { font-size: clamp(40px, 7vw, 92px); }
@@ -246,8 +243,9 @@ export default function LoginPage() {
         @media (max-width: 640px) {
           .nav { padding: 16px 20px; }
           .nav-signin { display: none; }
+          .brand-logo { height: 17px; }
         }
-        @media (prefers-reduced-motion: reduce) { .aurora, .dot, .scanbar, .ticker { animation: none; } }
+        @media (prefers-reduced-motion: reduce) { .aurora, .dot, .scanbar, .ticker, .hero-inner { animation: none; } }
       `}</style>
     </div>
   );
