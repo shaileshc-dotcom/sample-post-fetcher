@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { normalizePrivateKey } from "@/lib/google-key";
 
 /**
  * Google Docs generator (service-account based). Creates the Doc INSIDE a
@@ -25,7 +26,7 @@ export interface DocPassage {
 
 function auth() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+  const key = normalizePrivateKey(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY);
   if (!email || !key) throw new Error("Google service account is not configured (GOOGLE_SERVICE_ACCOUNT_EMAIL / _PRIVATE_KEY)");
   return new google.auth.JWT({
     email,

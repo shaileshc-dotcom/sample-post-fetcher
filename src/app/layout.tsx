@@ -7,8 +7,8 @@ const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" }
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "Sample Post Fetcher — GUESTPOSTLINKS",
-  description: "Scout any publisher domain and pull live sample articles.",
+  title: "GUESTPOSTLINKS — Internal Tools",
+  description: "Internal tooling for GUESTPOSTLINKS: publisher scouting, link insertion, indexing, and doc workflows.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

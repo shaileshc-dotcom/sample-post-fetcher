@@ -79,8 +79,8 @@ export default function LoginPage() {
       {/* Top nav */}
       <nav className="nav">
         <div className="brand">
-          <span className="mark">◆</span>
-          <span className="brand-name">GUESTPOSTLINKS</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-light.png" alt="GUESTPOSTLINKS" style={{ height: 26, width: "auto" }} />
         </div>
         <div className="nav-actions">
           <button className="nav-signin" onClick={() => openAuth("signin")}>Sign in</button>

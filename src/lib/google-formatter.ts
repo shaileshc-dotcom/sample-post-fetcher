@@ -1,9 +1,10 @@
 import { google } from "googleapis";
+import { normalizePrivateKey } from "@/lib/google-key";
 import { Readable } from "stream";
 
 function auth() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+  const key = normalizePrivateKey(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY);
   if (!email || !key) throw new Error("Google service account is not configured");
   return new google.auth.JWT({
     email, key,

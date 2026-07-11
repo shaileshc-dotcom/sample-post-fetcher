@@ -57,12 +57,8 @@ export function Sidebar({ email }: { email: string }) {
     <aside className="w-60 shrink-0 border-r border-[var(--border)] flex flex-col h-screen sticky top-0">
       <div className="px-5 py-5">
         <div className="flex items-center gap-2.5">
-          <span
-            className="inline-grid place-items-center w-8 h-8 rounded-lg text-sm"
-            style={{ background: "var(--grad)", color: "#241300", fontWeight: 700 }}
-          >
-            ◆
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.png" alt="GUESTPOSTLINKS" className="w-8 h-8 rounded-lg object-contain" />
           <div>
             <div className="font-semibold tracking-tight text-[13px] leading-none">GUESTPOSTLINKS</div>
             <div className="eyebrow mt-1">Internal Tools</div>
