@@ -176,6 +176,12 @@ export default function LoginPage() {
         :root {
           --primary: #ff6a3d;
           --accent: #ff8a4d;
+          /* Darker than --primary specifically for white text on a solid fill
+             (buttons, icon glyphs) — #ff6a3d only reaches 2.85:1 with white,
+             which fails WCAG AA even at the relaxed large-text 3:1 bar.
+             #c94716 reaches 4.78:1. Reserve --primary/--accent for large
+             display text, gradients on the dark panel, and non-fill accents. */
+          --primary-strong: #c94716;
           --page-bg: #fafbfd;
           --card: #ffffff;
           --line: #e8e8e8;
@@ -246,7 +252,7 @@ export default function LoginPage() {
         .feature-card:hover { background: rgba(245,243,240,0.08); border-color: rgba(245,243,240,0.16); transform: translateY(-1px); }
         .feature-icon {
           width: 32px; height: 32px; flex-shrink: 0; border-radius: 9px; display: grid; place-items: center;
-          background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff;
+          background: var(--primary-strong); color: #fff;
         }
         .feature-icon svg { width: 16px; height: 16px; }
         .feature-title { font-size: 13.5px; font-weight: 650; color: #f5f3f0; margin-bottom: 2px; }
@@ -313,10 +319,10 @@ export default function LoginPage() {
         .submit-btn {
           margin-top: var(--sp-2); width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
           padding: 13px; border: none; border-radius: 11px; color: #ffffff;
-          background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+          background: linear-gradient(135deg, var(--primary-strong) 0%, #bf4212 100%);
           font-size: 14.5px; font-weight: 650; cursor: pointer;
           transition: filter 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
-          box-shadow: 0 14px 28px -14px rgba(255,106,61,0.55);
+          box-shadow: 0 14px 28px -14px rgba(201,71,22,0.5);
         }
         .submit-btn:hover:not(:disabled) { filter: brightness(1.05); box-shadow: 0 16px 32px -12px rgba(255,106,61,0.6); }
         .submit-btn:active:not(:disabled) { transform: translateY(1px); }
