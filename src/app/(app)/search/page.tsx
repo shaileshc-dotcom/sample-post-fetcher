@@ -178,7 +178,7 @@ function SearchInner() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-[var(--danger)]/30 text-[var(--danger)] text-sm px-4 py-3 mb-6" style={{ background: "rgba(244,113,113,0.08)" }}>
+        <div className="rounded-xl border border-[var(--danger)]/30 text-[var(--danger)] text-sm px-4 py-3 mb-6" style={{ background: "rgba(220,38,38,0.08)" }}>
           {error}
         </div>
       )}
@@ -186,7 +186,7 @@ function SearchInner() {
       {loading && (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-12 rounded-xl bg-white/[0.03] animate-pulse" />
+            <div key={i} className="h-12 rounded-xl bg-[var(--panel-2)] animate-pulse" />
           ))}
         </div>
       )}

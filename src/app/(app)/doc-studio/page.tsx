@@ -29,7 +29,7 @@ export default function DocStudioPage() {
       <div className="inline-flex p-1 rounded-xl border border-[var(--border)] bg-[var(--panel)] mb-6">
         {(["format", "convert"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-lg text-sm transition ${tab === t ? "text-[#241300]" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
+            className={`px-4 py-2 rounded-lg text-sm transition ${tab === t ? "text-white" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
             style={tab === t ? { background: "var(--grad)", fontWeight: 600 } : undefined}>
             {t === "format" ? "Doc Formatter" : "Word → Google Doc"}
           </button>
@@ -106,7 +106,7 @@ function Formatter() {
           <div className="flex flex-wrap gap-2">
             {([["copy-format", "Copy client doc + Format"], ["format", "Format existing doc"], ["copy", "Copy only"]] as [Mode, string][]).map(([m, label]) => (
               <button key={m} onClick={() => setMode(m)}
-                className={`px-3 py-2 rounded-lg text-sm border transition ${mode === m ? "border-[var(--accent)]" : "border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]"}`}
+                className={`px-3 py-2 rounded-lg text-sm border transition ${mode === m ? "border-[var(--accent-strong)]" : "border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]"}`}
                 style={mode === m ? { background: "var(--accent-soft)" } : undefined}>{label}</button>
             ))}
           </div>

@@ -100,10 +100,10 @@ export default function HistoryPage() {
               const open = expanded.has(r.id);
               return (
                 <Fragment key={r.id}>
-                  <tr className="border-b border-[var(--border)] hover:bg-white/[0.02]">
+                  <tr className="border-b border-[var(--border)] hover:bg-[var(--panel-2)]">
                     <td className="px-4 py-3 font-medium">
                       {hasDetails ? (
-                        <button onClick={() => toggleExpand(r.id)} className="flex items-center gap-2 hover:text-[var(--accent)]">
+                        <button onClick={() => toggleExpand(r.id)} className="flex items-center gap-2 hover:text-[var(--accent-strong)]">
                           <span className="mono text-xs">{open ? "▾" : "▸"}</span>{r.domain}
                         </button>
                       ) : r.domain}
@@ -115,9 +115,9 @@ export default function HistoryPage() {
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => toggleFav(r)} title="Favorite" className="mr-2 text-sm">{r.is_favorite ? "★" : "☆"}</button>
                       {!isBulk && (
-                        <Link href={`/search?d=${encodeURIComponent(r.domain)}`} className="text-xs px-2 py-1 rounded-md border border-[var(--border)] hover:bg-white/5 mr-2">Re-run</Link>
+                        <Link href={`/search?d=${encodeURIComponent(r.domain)}`} className="text-xs px-2 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--panel-2)] mr-2">Re-run</Link>
                       )}
-                      <button onClick={() => remove(r.id)} className="text-xs px-2 py-1 rounded-md border border-[var(--border)] hover:bg-white/5 text-red-400/80">Delete</button>
+                      <button onClick={() => remove(r.id)} className="text-xs px-2 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--panel-2)] text-[var(--danger)]">Delete</button>
                     </td>
                   </tr>
                   {open && hasDetails && (

@@ -205,7 +205,7 @@ export default function InsertionPage() {
         <button onClick={findAll} disabled={!!busyAll} className="btn-primary px-4 py-2 text-sm">Find all pages</button>
         <button onClick={generateAll} disabled={!!busyAll || readyCount === 0} className="btn-primary px-4 py-2 text-sm">Generate all docs ({readyCount})</button>
         <button onClick={exportReport} disabled={!report.length} className="btn-ghost px-4 py-2 text-sm">Export report ({report.length})</button>
-        {busyAll && <span className="text-xs text-[var(--accent)] mono ml-2">{busyAll}</span>}
+        {busyAll && <span className="text-xs text-[var(--accent-strong)] mono ml-2">{busyAll}</span>}
         {logMsg && <span className="text-xs text-[var(--positive)] mono ml-2">{logMsg}</span>}
       </div>
 
@@ -254,7 +254,7 @@ export default function InsertionPage() {
               {!hasClientPage && order.candidates.length > 0 && (
                 <div className="mt-4 space-y-2">
                   {order.candidates.map((c) => (
-                    <label key={c.url} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition ${order.chosen === c.url ? "border-[var(--accent)]" : "border-[var(--border)] hover:border-[#2c3346]"}`} style={order.chosen === c.url ? { background: "var(--accent-soft)" } : undefined}>
+                    <label key={c.url} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition ${order.chosen === c.url ? "border-[var(--accent-strong)]" : "border-[var(--border)] hover:border-[var(--border-strong)]"}`} style={order.chosen === c.url ? { background: "var(--accent-soft)" } : undefined}>
                       <input type="radio" name={`c-${order.id}`} checked={order.chosen === c.url} onChange={() => patch(order.id, { chosen: c.url })} className="mt-1" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">

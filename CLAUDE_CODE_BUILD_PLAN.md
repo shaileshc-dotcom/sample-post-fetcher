@@ -104,16 +104,48 @@ zero rows for another user's profile), and an unauthenticated `curl` to
 `/api/fetch` (confirmed 401, regression-testing the auth-gap fix above).
 
 ## Phase 2 — Light, professional UI theme
-**Status: `[ ]` not started**
+**Status: `[x]` done — login page rebuilt, rest of the app retokened, WCAG contrast bug found and fixed**
 
-Replace the current **dark** theme ("Signal" — near-black navy, amber/rose
-gradient, defined in `src/app/globals.css`) with a light, professional SaaS
-theme: clean neutral background (#f7f8fa / white cards), slate text, one
-confident brand accent derived from the orange logo (e.g. `#ef6c3a`) plus a
-secondary indigo for interactive accents. WCAG-AA contrast. Update design
-tokens, sidebar, top bar, cards, tables, buttons, inputs, login page. Subtle
-motion (button press states, hover lifts, 150–250ms transitions). Keep all
-functionality.
+What shipped, in order:
+1. **Login page** ([src/app/login/page.tsx](src/app/login/page.tsx)) — full
+   rebuild, not just a recolor: split-screen (dark brand panel + light auth
+   card), Google OAuth via `signInWithOAuth` routed through the existing
+   `/auth/callback`, a proper typography/spacing scale, real feature cards
+   and honest stats (no fabricated numbers), password show/hide, pure-CSS
+   entrance animations (no blank-on-load flash). Self-contained token set,
+   doesn't touch `globals.css`. Final palette: `#FF6A3D` primary / `#FF8A4D`
+   accent / `#FAFBFD` bg / `#E8E8E8` border / `#111111` text / `#6B7280`
+   secondary — no indigo.
+2. **Contrast bug, found and fixed**: the login submit button and feature
+   icons filled `--primary`/`--accent` under white text/glyphs measured
+   2.85:1/2.33:1 — below AA even at the relaxed 3:1 large-text threshold.
+   Added `--primary-strong` (`#c94716`, 4.78:1) for solid fills; `--primary`/
+   `--accent` stay for large display text and non-fill accents, where they
+   measure 7–8.5:1 against the dark panel.
+3. **Rest of the app** — `globals.css` tokens rewritten to match the login
+   page's palette exactly (dropped the earlier draft `#ef6c3a`/indigo
+   proposal for consistency with what was actually approved). Same
+   `--accent` vs `--accent-strong` split applied everywhere: every small
+   colored text/icon/border that had been using `--accent` (2.85:1, fails)
+   was moved to `--accent-strong` (4.78:1) — sidebar active nav icon,
+   category-select selected item, insertion/insertion-log link colors,
+   index-check SERP link, doc-studio/insertion selected-state borders.
+   Dark-theme-only remnants fixed: `#241300` "dark text on active tab" →
+   white (bulk/doc-studio/index-check), `hover:bg-white/[...]` row/item
+   hovers → `--panel-2` (results-table, sidebar, category-select, and the
+   dashboard/bulk/index-check/history/insertion-log tables), a washed-out
+   `text-red-400/80` delete action → `--danger`, hardcoded error-banner and
+   progress-bar tints → token-matched values. Avatar gradient presets left
+   untouched (decorative per-user identity colors, not chrome).
+   `--positive`/`--accent-2` kept as variable *names* (each referenced
+   directly in 5-6 page files) but given new values/meaning rather than
+   being renamed, to avoid unnecessary churn.
+4. Functionality, routes, and Phase 1 role gating/sidebar filtering
+   untouched throughout — restyle only.
+
+Not done as part of this phase (unchanged from the original scope): top bar
+(no dedicated component exists; each page's inline header was left as-is),
+sidebar team-based regrouping/renaming (that's Phase 3).
 
 ## Phase 3 — Reorganize navigation by team + rename features
 **Status: `[ ]` not started** (depends on Phase 1's role model)

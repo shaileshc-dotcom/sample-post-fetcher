@@ -120,7 +120,7 @@ export default function BulkPage() {
               </div>
               <div className="text-[var(--muted)] text-xs mono">{stats.speed.toFixed(1)}/s{stats.eta !== null && state === "running" ? ` · ETA ${stats.eta}s` : ""}</div>
             </div>
-            <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+            <div className="h-2 rounded-full bg-[var(--panel-2)] overflow-hidden">
               <motion.div className="h-full" style={{ background: "var(--grad)" }} animate={{ width: `${stats.pct}%` }} transition={{ ease: "easeOut" }} />
             </div>
             <div className="flex gap-2 mt-4 flex-wrap">
@@ -140,7 +140,7 @@ export default function BulkPage() {
             <div className="inline-flex p-1 rounded-lg border border-[var(--border)] bg-[var(--panel)]">
               {(["all", "found", "failed"] as const).map((f) => (
                 <button key={f} onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 rounded-md text-xs transition ${filter === f ? "text-[#241300]" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
+                  className={`px-3 py-1.5 rounded-md text-xs transition ${filter === f ? "text-white" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
                   style={filter === f ? { background: "var(--grad)", fontWeight: 600 } : undefined}>
                   {f === "all" ? `All (${items.length})` : f === "found" ? `Found (${groups.length})` : `No posts (${stats.failed})`}
                 </button>
@@ -170,7 +170,7 @@ export default function BulkPage() {
               </thead>
               <tbody>
                 {visible.map((it) => (
-                  <tr key={it.domain} className="border-b border-[var(--border)] last:border-0 hover:bg-white/[0.02] align-top">
+                  <tr key={it.domain} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-2)] align-top">
                     <td className="px-4 py-3 font-medium truncate" title={it.domain}>{it.domain}</td>
                     <td className="px-4 py-3"><StatusBadge status={it.status} /></td>
                     <td className="px-4 py-3 text-[var(--muted)] mono">{it.articles.length || "—"}</td>

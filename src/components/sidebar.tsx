@@ -83,11 +83,11 @@ export function Sidebar({ email, role }: { email: string; role: Role }) {
                     key={item.href}
                     href={item.href}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
-                      active ? "text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-white/[0.03]"
+                      active ? "text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--panel-2)]"
                     }`}
                     style={active ? { background: "var(--accent-soft)" } : undefined}
                   >
-                    <span className="mono text-base w-4 text-center" style={active ? { color: "var(--accent)" } : undefined}>
+                    <span className="mono text-base w-4 text-center" style={active ? { color: "var(--accent-strong)" } : undefined}>
                       {item.glyph}
                     </span>
                     {item.label}

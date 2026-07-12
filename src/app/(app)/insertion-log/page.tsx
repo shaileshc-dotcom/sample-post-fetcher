@@ -70,10 +70,10 @@ export default function InsertionLogPage() {
               const open = expanded.has(r.id);
               return (
                 <Fragment key={r.id}>
-                  <tr className="border-b border-[var(--border)] hover:bg-white/[0.02]">
+                  <tr className="border-b border-[var(--border)] hover:bg-[var(--panel-2)]">
                     <td className="px-4 py-3">{r.run_by || "—"}</td>
                     <td className="px-4 py-3 font-medium">
-                      {isBatch ? <button onClick={() => toggle(r.id)} className="flex items-center gap-2 hover:text-[var(--accent)]"><span className="mono text-xs">{open ? "▾" : "▸"}</span>{r.website}</button> : r.website}
+                      {isBatch ? <button onClick={() => toggle(r.id)} className="flex items-center gap-2 hover:text-[var(--accent-strong)]"><span className="mono text-xs">{open ? "▾" : "▸"}</span>{r.website}</button> : r.website}
                     </td>
                     <td className="px-4 py-3">{r.anchor}</td>
                     <td className="px-4 py-3"><span className={`pill mono ${r.index_status.includes("indexed") && !r.index_status.includes("not") ? "pill-pos" : r.index_status === "batch" ? "pill-mut" : "pill-warn"}`}>{r.index_status}</span></td>

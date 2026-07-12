@@ -27,7 +27,7 @@ export function ResultsTable({ articles, indexMap }: { articles: Article[]; inde
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
-              className="border-b border-[var(--border)] last:border-0 hover:bg-white/[0.02]"
+              className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-2)]"
             >
               <td className="px-4 py-3 max-w-md">
                 <div className="font-medium text-[var(--text)] truncate">{a.title}</div>

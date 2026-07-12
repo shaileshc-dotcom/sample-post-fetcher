@@ -99,7 +99,7 @@ export default function Dashboard() {
           </thead>
           <tbody>
             {rows.slice(0, 10).map((r) => (
-              <tr key={r.id} className="border-b border-[var(--border)] last:border-0 hover:bg-white/[0.02]">
+              <tr key={r.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-2)]">
                 <td className="px-4 py-3 mono">{r.domain}</td>
                 <td className="px-4 py-3 mono text-[var(--muted)]">{r.articles_found}</td>
                 <td className="px-4 py-3">

@@ -92,9 +92,21 @@ supabase/schema.sql                 # tables + RLS
   bulk concurrency, AI-on-by-default, default prompt, auto-index toggles. None
   of this is stored in Supabase today. Splitting this into admin-controlled
   globals vs. per-user values (DB-backed) is planned — see Phase 5.
-- **Theme**: currently a **dark** theme ("Signal" — near-black navy background,
-  amber/rose gradient accent) defined in [src/app/globals.css](src/app/globals.css).
-  Replacing this with a light professional theme is planned — see Phase 2.
+- **Theme (Phase 2, done)**: light professional theme — neutral canvas
+  (`--bg: #fafbfd`, white cards), near-black text (`#111111`), orange brand
+  accent, no indigo (dropped for consistency with the approved login page —
+  see below). Tokens live in [src/app/globals.css](src/app/globals.css).
+  **`--accent`/`--accent-2` (`#ff6a3d`/`#ff8a4d`) are for large text, icons on
+  the dark login panel, and non-fill decorative use only** — at small sizes
+  with white content they measure 2.85:1/2.33:1, short of WCAG AA even at the
+  relaxed 3:1 large-text/non-text threshold. Anything that's a solid fill with
+  white text/icons, or small colored text/borders on a light background, uses
+  `--accent-strong` (`#c94716`, 4.78:1) instead — this distinction bit us once
+  already (shipped a submit button and several small accent-colored links at
+  the wrong contrast, then fixed it) so it's worth preserving when adding new
+  UI. The login page ([src/app/login/page.tsx](src/app/login/page.tsx)) is
+  the one place with its own self-contained token set and matching
+  `--primary-strong` split — it doesn't consume `globals.css` at all.
 - **Bulk search architecture**: orchestrated client-side — the browser fires
   one bounded-concurrency request per domain to `/api/fetch` rather than using
   a server-side job queue, specifically to avoid Vercel's serverless function

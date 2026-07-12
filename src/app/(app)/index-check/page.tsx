@@ -128,7 +128,7 @@ export default function IndexAndTasksPage() {
       <div className="inline-flex p-1 rounded-xl border border-[var(--border)] bg-[var(--panel)] mb-5">
         {(["check", "submit"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-lg text-sm transition ${tab === t ? "text-[#241300]" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
+            className={`px-4 py-2 rounded-lg text-sm transition ${tab === t ? "text-white" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
             style={tab === t ? { background: "var(--grad)", fontWeight: 600 } : undefined}>
             {t === "check" ? "Check Index" : "Submit for Indexing"}
           </button>
@@ -208,7 +208,7 @@ export default function IndexAndTasksPage() {
           </thead>
           <tbody>
             {dedupedTasks.map((t) => (
-              <tr key={t.id} className="border-b border-[var(--border)] last:border-0 hover:bg-white/[0.02]">
+              <tr key={t.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-2)]">
                 <td className="px-4 py-3 mono text-xs max-w-md truncate" title={t.url}>{t.url}</td>
                 <td className="px-4 py-3"><span className={`pill ${SOURCE_STYLE[t.source] || "pill-mut"} mono`}>{t.source}</span></td>
                 <td className="px-4 py-3"><span className={`pill mono ${t.status === "indexed" ? "pill-pos" : t.status === "not_indexed" ? "pill-warn" : "pill-amber"}`}>{t.status}</span></td>
@@ -232,7 +232,7 @@ function Bal({ label, value, hint, warn }: { label: string; value?: number; hint
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border)]" title={hint}>
       <span className="eyebrow">{label}</span>
-      <span className={`mono text-sm font-medium ${warn ? "text-[var(--accent-2)]" : "text-[var(--text)]"}`}>{value?.toLocaleString() ?? "—"}</span>
+      <span className={`mono text-sm font-medium ${warn ? "text-[var(--warn)]" : "text-[var(--text)]"}`}>{value?.toLocaleString() ?? "—"}</span>
     </div>
   );
 }
@@ -244,7 +244,7 @@ function UrlList({ title, cls, urls }: { title: string; cls: string; urls: strin
       <div className="space-y-1.5 max-h-72 overflow-auto">
         {urls.map((u) => (
           <div key={u} className="flex items-center gap-2 text-xs">
-            <a href={`https://www.google.com/search?q=${encodeURIComponent(`site:${u}`)}`} target="_blank" rel="noreferrer" className="text-[var(--muted)] hover:text-[var(--accent)]" title="Open SERP">⌕</a>
+            <a href={`https://www.google.com/search?q=${encodeURIComponent(`site:${u}`)}`} target="_blank" rel="noreferrer" className="text-[var(--muted)] hover:text-[var(--accent-strong)]" title="Open SERP">⌕</a>
             <span className="mono text-[var(--muted)] truncate" title={u}>{u}</span>
           </div>
         ))}

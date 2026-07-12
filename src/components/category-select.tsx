@@ -24,10 +24,10 @@ export function CategorySelect({ value, onChange, placeholder = "Any category â€
       {open && (
         <div className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--panel)] shadow-xl">
           <button type="button" onMouseDown={() => { onChange(""); setOpen(false); }}
-            className="w-full text-left px-3 py-2 text-sm hover:bg-white/5 text-[var(--muted)]">Any category</button>
+            className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--panel-2)] text-[var(--muted)]">Any category</button>
           {list.map((n) => (
             <button key={n} type="button" onMouseDown={() => { onChange(n); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-white/5 ${value === n ? "text-[var(--accent)]" : ""}`}>{n}</button>
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-[var(--panel-2)] ${value === n ? "text-[var(--accent-strong)]" : ""}`}>{n}</button>
           ))}
           {!list.length && <div className="px-3 py-2 text-sm text-[var(--muted)]">No match</div>}
         </div>
