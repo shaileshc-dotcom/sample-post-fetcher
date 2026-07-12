@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { siAccount, siCreateCheck, siStatus, siReport, siIndexStatus, siSubmitIndex, type SearchEngine } from "@/lib/speedyindex";
 import { createServerClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/api-guard";
 
 export const maxDuration = 30;
 export const dynamic = "force-dynamic";
@@ -11,6 +12,9 @@ export const dynamic = "force-dynamic";
  * body: { action: 'account'|'create'|'status'|'report', urls?, taskId?, engine? }
  */
 export async function POST(req: NextRequest) {
+  const gate = await requireApiRole(["admin", "order_processing"]);
+  if (gate instanceof NextResponse) return gate;
+
   let body: { action?: string; urls?: string[]; taskId?: string; engine?: SearchEngine; source?: string };
   try {
     body = await req.json();

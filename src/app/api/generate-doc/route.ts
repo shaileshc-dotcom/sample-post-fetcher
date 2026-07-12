@@ -5,6 +5,7 @@ import { composeInsertion } from "@/lib/ai/enrich";
 import { createInsertionDoc } from "@/lib/google-docs";
 import { siSubmitIndex } from "@/lib/speedyindex";
 import { createServerClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/api-guard";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -23,6 +24,9 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireApiRole(["admin", "order_processing"]);
+  if (gate instanceof NextResponse) return gate;
+
   let body: Body;
   try {
     body = await req.json();

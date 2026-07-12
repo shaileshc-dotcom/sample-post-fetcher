@@ -31,7 +31,7 @@ SaaS platform (roles, admin panel, new modules) — see the build plan.
 
 ```
 src/
-  middleware.ts                     # session refresh + route protection
+  proxy.ts                          # session refresh + route protection (was middleware.ts)
   app/
     layout.tsx, globals.css         # root layout + theme
     login/page.tsx                  # auth (sign in / sign up)
@@ -65,14 +65,28 @@ supabase/schema.sql                 # tables + RLS
 
 ## Current architecture — state of things as of this doc
 
-- **Auth**: Supabase email/password only. `middleware.ts` refreshes the
-  session and protects routes. There is **no role/permission model yet** —
-  every authenticated user sees every page. Role-based access control (admin /
-  seo / order_processing / content) is planned but not built — see Phase 1 in
-  the build plan.
+- **Auth + roles (Phase 1, done)**: Supabase email/password. `proxy.ts` (was
+  `middleware.ts` — renamed per Next 16's deprecation, see below) refreshes
+  the session and redirects signed-out users. On top of that, every page and
+  API route is gated by role via `src/lib/current-role.ts`
+  (`getCurrentRole()`, server-only, request-memoized),
+  `src/components/require-role.tsx` (`<RequireRole roles={[...]}>` for
+  pages, applied via a small per-route `layout.tsx` since all existing pages
+  are `"use client"`), and `src/lib/api-guard.ts` (`requireApiRole()` for
+  Route Handlers). The role → route mapping lives in one place:
+  `src/lib/roles.ts`'s `ROUTE_ROLES`. Four roles: `admin`, `seo`,
+  `order_processing`, `content`. New signups default to `role = 'content'`,
+  `active = false` — they land on `/pending` until an admin activates them;
+  this is a deliberate change from the old "instant access on signup"
+  behavior described in the README.
 - **Database tables that exist today**: `search_history`, `favorites`,
-  `fetch_cache` — all with RLS scoped to `auth.uid() = user_id`. There is
-  **no `profiles`/`members` table yet**.
+  `fetch_cache`, and `profiles` — all with RLS scoped to
+  `auth.uid() = user_id` (profiles additionally has admin-wide policies via a
+  `SECURITY DEFINER is_admin()` helper, plus a trigger that blocks non-admins
+  from changing their own `role`/`team`/`active`/`email` even though they can
+  update their own row for `display_name`/`avatar`). `profiles` predates
+  Phase 1 (it already existed for display_name/avatar) and was *extended*,
+  not created fresh — see Phase 1 in the build plan for the full migration.
 - **Settings are per-browser, not per-user**: [src/lib/settings.ts](src/lib/settings.ts)
   reads/writes a JSON blob to `localStorage` (key `sps_settings`) — posts-per-domain,
   bulk concurrency, AI-on-by-default, default prompt, auto-index toggles. None

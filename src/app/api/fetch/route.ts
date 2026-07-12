@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchSamplePosts } from "@/lib/fetchers/orchestrator";
 import { createServerClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/api-guard";
 import type { FetchOptions } from "@/lib/types";
 
 // Scraping + AI can run long; allow up to 60s on Vercel (Pro). Hobby = 10s.
@@ -13,6 +14,9 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireApiRole(["admin", "order_processing"]);
+  if (gate instanceof NextResponse) return gate;
+
   let body: Body;
   try {
     body = (await req.json()) as Body;

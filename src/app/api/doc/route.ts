@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { copyDoc, convertWordToDoc, formatDoc, getDocParagraphs, extractFileId } from "@/lib/google-formatter";
 import { classifyParagraphs } from "@/lib/ai/classify";
+import { requireApiRole } from "@/lib/api-guard";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ async function formatById(fileId: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireApiRole(["admin", "order_processing", "seo", "content"]);
+  if (gate instanceof NextResponse) return gate;
+
   let body: Body;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 

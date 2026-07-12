@@ -47,25 +47,61 @@ is exactly the kind of one-focused-change-at-a-time work this plan is meant
 to avoid bundling into "Phase 0: bump Next.js."
 
 ## Phase 1 — Roles, teams & access control (FOUNDATION)
-**Status: `[ ]` not started**
+**Status: `[x]` done — SQL migration run in Supabase, app code applied, test plan passed**
 
 4 roles: `admin`, `seo`, `order_processing`, `content`. Admin sees everything;
-each team sees only its own sections. **Enforce in the database (RLS), not
+each team sees only its own sections. **Enforced in the database (RLS), not
 just the UI.**
 
-- New Supabase table `profiles` (or `members`): `user_id`, `email`,
-  `full_name`, `role` (enum), `team`, `active`, `created_at`.
-- RLS: users can read their own profile; admins can read/update all.
-- Server helper `getCurrentRole()` and a `<RequireRole roles={[...]}>` guard.
-- Gate every page and API route by role:
-  - `order_processing`: Search (single), Bulk Search, Indexing, Link Insertion, Doc Studio
-  - `seo`: Article Generator, Backlink Monitor, Doc Studio
-  - `content`: Doc Studio
-  - `admin`: everything, plus an Admin panel
-- Redirect users who lack access.
-- Note: today there is **no** `profiles` table and **no** role concept at all
-  (see CLAUDE.md) — this is entirely new, not a modification of existing
-  access logic.
+What actually shipped (see CLAUDE.md "Current architecture" for the full
+picture):
+- Extended the **existing** `profiles` table (it predated this phase,
+  undocumented in `schema.sql` until now) with `email`, `role` (new
+  `user_role` enum: admin/seo/order_processing/content), `team`, `active`,
+  `created_at` — kept `display_name`/`avatar` as-is rather than adding a
+  redundant `full_name` column.
+- RLS: users read/update their own row; admins read/update all rows (via a
+  `SECURITY DEFINER is_admin()` helper to avoid recursive-policy issues). A
+  `BEFORE UPDATE` trigger strips any attempt to change `role`/`team`/`active`/
+  `email` unless the caller is currently an admin — even though the
+  self-update policy has to stay open for the existing display-name/avatar
+  editing to keep working.
+- New signups default to `role = 'content'`, `active = false` (pending admin
+  approval) — a deliberate change from the old "instant access on signup"
+  behavior, since roles now matter. Existing pre-migration rows were **not**
+  blanket-activated; only the first admin's row was activated via a one-off
+  bootstrap `UPDATE`. Everyone else stays pending until manually approved
+  (roster-based SQL or the Phase 6 admin panel).
+- `src/lib/roles.ts` (`Role` type + `ROUTE_ROLES` map — single source of
+  truth), `src/lib/current-role.ts` (`getCurrentRole()`, server-only,
+  request-memoized), `src/lib/api-guard.ts` (`requireApiRole()` for Route
+  Handlers), `src/components/require-role.tsx` (`<RequireRole>` for pages).
+- Gating applied via a small per-route `layout.tsx` in each gated segment
+  (all existing pages are `"use client"`, so gating lives one level up
+  rather than inside the pages themselves) plus `requireApiRole()` at the
+  top of every gated API route:
+  - `order_processing` + `admin`: `/search`, `/bulk`, `/history`,
+    `/insertion`, `/insertion-log`, `/index-check`, and their backing routes
+    `/api/fetch`, `/api/analyze`, `/api/insertion`, `/api/generate-doc`,
+    `/api/index-check`
+  - `order_processing` + `seo` + `content` + `admin`: `/doc-studio`,
+    `/api/doc`
+  - all four roles: `/` (Dashboard), `/settings`
+- New `/pending` page (outside the `(app)` route group) for inactive users,
+  with a sign-out control.
+- Minimal role-based sidebar filtering added now (full team regroup/rename
+  still Phase 3).
+- `src/middleware.ts` → `src/proxy.ts` via the official `@next/codemod`
+  (pure rename, matcher/logic untouched — required since Next 16 deprecated
+  the `middleware` convention).
+- Side effect fixed as a consequence of doing this correctly: `/api/fetch`
+  previously had **no auth check at all** on its core scraping logic — now
+  closed by `requireApiRole()`.
+
+Verified via: self-escalation attempt (PATCH own role via PostgREST directly,
+confirmed trigger reverts it), cross-user read attempt (confirmed RLS returns
+zero rows for another user's profile), and an unauthenticated `curl` to
+`/api/fetch` (confirmed 401, regression-testing the auth-gap fix above).
 
 ## Phase 2 — Light, professional UI theme
 **Status: `[ ]` not started**

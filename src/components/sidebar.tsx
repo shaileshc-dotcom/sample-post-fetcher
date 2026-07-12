@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getProfile } from "@/lib/profile";
 import { Avatar } from "@/components/avatar";
+import { ROUTE_ROLES, type Role } from "@/lib/roles";
 
 const SECTIONS: { heading: string; items: { href: string; label: string; glyph: string }[] }[] = [
   {
@@ -34,12 +35,16 @@ const SECTIONS: { heading: string; items: { href: string; label: string; glyph: 
   },
 ];
 
-export function Sidebar({ email }: { email: string }) {
+export function Sidebar({ email, role }: { email: string; role: Role }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("");
+  const visibleSections = SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => ROUTE_ROLES[item.href]?.includes(role)),
+  })).filter((section) => section.items.length > 0);
   useEffect(() => {
     const load = () => getProfile().then(({ profile }) => { setName(profile.display_name); setAvatar(profile.avatar); });
     void load();
@@ -67,7 +72,7 @@ export function Sidebar({ email }: { email: string }) {
       </div>
 
       <nav className="flex-1 px-3 overflow-y-auto">
-        {SECTIONS.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.heading} className="mb-4">
             <div className="eyebrow px-3 mb-1.5 opacity-70">{section.heading}</div>
             <div className="space-y-1">
