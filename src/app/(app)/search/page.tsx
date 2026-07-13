@@ -8,6 +8,7 @@ import { CategorySelect } from "@/components/category-select";
 import { DATE_PRESETS } from "@/lib/categories";
 import { toDomainCSV, toArticleCSV, toMarkdown, download } from "@/lib/export";
 import { getSettings } from "@/lib/settings";
+import { getMyPrompt } from "@/lib/app-settings";
 import { normalizeDomain } from "@/lib/http";
 import { checkIndex, submitForIndexing } from "@/lib/hooks/useIndexCheck";
 import type { Article, FetchResult } from "@/lib/types";
@@ -74,9 +75,8 @@ function SearchInner() {
   );
 
   useEffect(() => {
-    const s = getSettings();
-    setEnrich(s.aiDefault);
-    setPrompt(s.defaultPrompt);
+    setEnrich(getSettings().aiDefault);
+    void getMyPrompt().then(setPrompt);
     const d = params.get("d");
     if (d) {
       setDomain(d);

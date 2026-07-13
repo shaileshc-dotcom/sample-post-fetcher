@@ -60,6 +60,21 @@ export async function convertWordToDoc(buffer: Buffer, name: string): Promise<{ 
   return { id, url: `https://docs.google.com/document/d/${id}/edit`, name: clean };
 }
 
+/** Convert pasted HTML into a native Google Doc in the Shared Drive. Drive's
+ *  import conversion preserves headings, lists, tables, bold/italic, and links. */
+export async function convertHtmlToDoc(html: string, name: string): Promise<{ id: string; url: string; name: string }> {
+  const drive = google.drive({ version: "v3", auth: auth() });
+  const file = await drive.files.create({
+    supportsAllDrives: true,
+    requestBody: { name, mimeType: "application/vnd.google-apps.document", parents: [sharedDrive()] },
+    media: { mimeType: "text/html", body: Readable.from(Buffer.from(html, "utf8")) },
+    fields: "id",
+  });
+  const id = file.data.id!;
+  await shareAnyone(id);
+  return { id, url: `https://docs.google.com/document/d/${id}/edit`, name };
+}
+
 interface Para { text: string; start: number; end: number; isList: boolean; }
 
 function readParagraphs(content: unknown[]): Para[] {

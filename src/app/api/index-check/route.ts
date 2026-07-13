@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * body: { action: 'account'|'create'|'status'|'report', urls?, taskId?, engine? }
  */
 export async function POST(req: NextRequest) {
-  const gate = await requireApiRole(["admin", "order_processing"]);
+  const gate = await requireApiRole("/index-check");
   if (gate instanceof NextResponse) return gate;
 
   let body: { action?: string; urls?: string[]; taskId?: string; engine?: SearchEngine; source?: string };

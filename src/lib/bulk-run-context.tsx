@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { getSettings } from "@/lib/settings";
 import { normalizeDomain } from "@/lib/http";
 import { createClient } from "@/lib/supabase/client";
@@ -20,12 +20,36 @@ export interface BulkItem {
 
 export type RunnerState = "idle" | "running" | "paused" | "done";
 
+export interface CompletedSummary { total: number; domainsFound: number; articlesFound: number; failed: number; at: number; }
+
+interface BulkRunContextValue {
+  items: BulkItem[];
+  state: RunnerState;
+  startedAt: number | null;
+  completedSummary: CompletedSummary | null;
+  start: (raw: string, promptOverride?: string, sinceDays?: number | null) => void;
+  pause: () => void;
+  resume: () => void;
+  cancel: () => void;
+  retryFailed: () => void;
+  reset: () => void;
+  dismissCompletedSummary: () => void;
+}
+
+const BulkRunContext = createContext<BulkRunContextValue | null>(null);
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function useBulkRunner() {
+/**
+ * Lives in a Provider wrapping the whole authenticated app shell (not the
+ * /bulk page itself) so a running bulk scan — and the "it's done" toast —
+ * survives navigating to another page and back.
+ */
+export function BulkRunProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<BulkItem[]>([]);
   const [state, setState] = useState<RunnerState>("idle");
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [completedSummary, setCompletedSummary] = useState<CompletedSummary | null>(null);
 
   const pausedRef = useRef(false);
   const cancelledRef = useRef(false);
@@ -77,8 +101,8 @@ export function useBulkRunner() {
 
   const runQueue = useCallback(
     async (domains: string[]) => {
-      const { concurrency, aiDefault, postsPerDomain, defaultPrompt } = getSettings();
-      const prompt = promptRef.current || defaultPrompt;
+      const { concurrency, aiDefault, postsPerDomain } = getSettings();
+      const prompt = promptRef.current;
       const nextIndex = { i: 0 };
       const worker = async () => {
         while (true) {
@@ -116,6 +140,7 @@ export function useBulkRunner() {
       pausedRef.current = false;
       setItems(domains.map((domain) => ({ domain, status: "queued", articles: [] })));
       setStartedAt(Date.now());
+      setCompletedSummary(null);
       setState("running");
       void runQueue(domains);
     },
@@ -138,16 +163,17 @@ export function useBulkRunner() {
   }, []);
 
   const retryFailed = useCallback(() => {
-    const failed = items.filter((it) => it.status === "failed").map((it) => it.domain);
-    if (!failed.length) return;
-    cancelledRef.current = false;
-    pausedRef.current = false;
-    setItems((prev) =>
-      prev.map((it) => (it.status === "failed" ? { ...it, status: "queued", error: undefined } : it))
-    );
-    setState("running");
-    void runQueue(failed);
-  }, [items, runQueue]);
+    setItems((prev) => {
+      const failed = prev.filter((it) => it.status === "failed").map((it) => it.domain);
+      if (failed.length) {
+        cancelledRef.current = false;
+        pausedRef.current = false;
+        setState("running");
+        void runQueue(failed);
+      }
+      return prev.map((it) => (it.status === "failed" ? { ...it, status: "queued", error: undefined } : it));
+    });
+  }, [runQueue]);
 
   const writeBulkSummary = useCallback(async (count: number) => {
     try {
@@ -160,7 +186,9 @@ export function useBulkRunner() {
       const snapshot = await new Promise<BulkItem[]>((resolve) => {
         setItems((prev) => { resolve(prev); return prev; });
       });
-      const found = snapshot.reduce((s, it) => s + it.articles.length, 0);
+      const articlesFound = snapshot.reduce((s, it) => s + it.articles.length, 0);
+      const failed = snapshot.filter((it) => it.status === "failed").length;
+      const domainsFound = snapshot.length - failed;
       const details = snapshot.map((it) => ({
         domain: it.domain,
         count: it.articles.length,
@@ -170,12 +198,13 @@ export function useBulkRunner() {
         user_id: user.id,
         run_by: runBy,
         domain: `Bulk run · ${count} domains`,
-        articles_found: found,
+        articles_found: articlesFound,
         duration_ms: 0,
         fetch_method: "bulk",
         status: "success",
         details,
       });
+      setCompletedSummary({ total: count, domainsFound, articlesFound, failed, at: Date.now() });
     } catch { /* non-critical */ }
   }, []);
 
@@ -191,5 +220,17 @@ export function useBulkRunner() {
     setTimeout(() => { cancelledRef.current = false; }, 0);
   }, []);
 
-  return { items, state, startedAt, start, pause, resume, cancel, retryFailed, reset };
+  const dismissCompletedSummary = useCallback(() => setCompletedSummary(null), []);
+
+  return (
+    <BulkRunContext.Provider value={{ items, state, startedAt, completedSummary, start, pause, resume, cancel, retryFailed, reset, dismissCompletedSummary }}>
+      {children}
+    </BulkRunContext.Provider>
+  );
+}
+
+export function useBulkRun(): BulkRunContextValue {
+  const ctx = useContext(BulkRunContext);
+  if (!ctx) throw new Error("useBulkRun must be used within BulkRunProvider");
+  return ctx;
 }

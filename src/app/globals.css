@@ -28,6 +28,31 @@
   --grad: linear-gradient(135deg, #c94716 0%, #bf4212 100%);
 }
 
+/*
+  Dark mode — opt-in via Settings (data-theme attribute set on <html>, see
+  layout.tsx's anti-flash script and lib/settings.ts's applyTheme()).
+  --accent-strong/--positive/--warn/--danger get LIGHTER dark-mode-specific
+  values: the light-mode versions were darkened specifically for 4.5:1+
+  against a WHITE background (measuring only 3.5-4.0:1 against this dark
+  background) — verified with the same contrast formula, not assumed.
+  --accent/--accent-2/--grad are unchanged: already 6.8-8.5:1 against dark
+  (they were designed for the login page's dark panel).
+*/
+:root[data-theme="dark"] {
+  --bg: #0d0e12;
+  --panel: #16181d;
+  --panel-2: #1e2128;
+  --border: #2a2e37;
+  --border-strong: #454b57;
+  --text: #edeef0;
+  --muted: #9aa1ac;
+  --accent-strong: #ff8552;
+  --accent-soft: rgba(255, 106, 61, 0.16);
+  --positive: #34d399;
+  --warn: #eab308;
+  --danger: #f87171;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -110,6 +135,7 @@ h1, h2, h3 {
 .pill-mut { color: var(--muted); background: var(--panel-2); }
 .pill-amber { color: var(--accent-strong); background: var(--accent-soft); }
 .pill-warn { color: var(--warn); background: rgba(161,98,7,0.10); }
+.pill-neg { color: var(--danger); background: rgba(220,38,38,0.10); }
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: #d3d7dd; border-radius: 5px; }

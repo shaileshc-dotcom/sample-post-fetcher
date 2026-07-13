@@ -6,31 +6,45 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getProfile } from "@/lib/profile";
 import { Avatar } from "@/components/avatar";
-import { ROUTE_ROLES, type Role } from "@/lib/roles";
+import type { Role } from "@/lib/roles";
 
 const SECTIONS: { heading: string; items: { href: string; label: string; glyph: string }[] }[] = [
   {
     heading: "Scout",
     items: [
       { href: "/", label: "Dashboard", glyph: "◧" },
-      { href: "/search", label: "Single Search", glyph: "⌕" },
-      { href: "/bulk", label: "Bulk Search", glyph: "≣" },
+      { href: "/search", label: "Publisher Sample Search", glyph: "⌕" },
+      { href: "/bulk", label: "Bulk Publisher Search", glyph: "≣" },
     ],
   },
   {
     heading: "Placement",
     items: [
       { href: "/insertion", label: "Link Insertion", glyph: "⤵" },
-      { href: "/index-check", label: "Index & Tasks", glyph: "◉" },
+      { href: "/insertion-log", label: "Insertion Log", glyph: "✎" },
+      { href: "/index-check", label: "Indexing", glyph: "◉" },
+      { href: "/missive", label: "Missive Search", glyph: "✉" },
+    ],
+  },
+  {
+    heading: "SEO",
+    items: [
+      { href: "/article-generator", label: "Article Generator", glyph: "✎" },
+      { href: "/backlink-monitor", label: "Backlink Monitor", glyph: "◈" },
     ],
   },
   {
     heading: "Workspace",
     items: [
       { href: "/history", label: "History", glyph: "◷" },
-      { href: "/insertion-log", label: "Insertion Log", glyph: "✎" },
       { href: "/doc-studio", label: "Doc Studio", glyph: "▤" },
       { href: "/settings", label: "Settings", glyph: "⚙" },
+    ],
+  },
+  {
+    heading: "Admin",
+    items: [
+      { href: "/admin", label: "Team & Access", glyph: "◆" },
     ],
   },
 ];
@@ -41,15 +55,26 @@ export function Sidebar({ email, role }: { email: string; role: Role }) {
   const supabase = createClient();
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("");
-  const visibleSections = SECTIONS.map((section) => ({
-    ...section,
-    items: section.items.filter((item) => ROUTE_ROLES[item.href]?.includes(role)),
-  })).filter((section) => section.items.length > 0);
+  const [routeAccess, setRouteAccess] = useState<Record<string, Role[]> | null>(null);
+  const visibleSections = routeAccess
+    ? SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => routeAccess[item.href]?.includes(role)),
+      })).filter((section) => section.items.length > 0)
+    : [];
   useEffect(() => {
     const load = () => getProfile().then(({ profile }) => { setName(profile.display_name); setAvatar(profile.avatar); });
     void load();
     window.addEventListener("profile-updated", load);
     return () => window.removeEventListener("profile-updated", load);
+  }, []);
+  useEffect(() => {
+    void supabase.from("route_access").select("route, roles").then(({ data }) => {
+      const map: Record<string, Role[]> = {};
+      (data ?? []).forEach((r) => { map[r.route] = r.roles as Role[]; });
+      setRouteAccess(map);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function signOut() {

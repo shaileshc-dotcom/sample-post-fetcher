@@ -124,10 +124,14 @@ full list of names:
 - `SPEEDYINDEX_API_KEY` (optional)
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`,
   `GOOGLE_SHARED_DRIVE_ID`
-- `MISSIVE_API_TOKEN` — planned for Phase 8, not yet added
-- A future Supabase **service-role key** will be needed for Phase 6 (admin user
-  management). It must stay server-only and is more powerful than the anon
-  key — it bypasses RLS entirely. Never expose it to the client, never log it.
+- `MISSIVE_API_TOKEN` — added to local `.env.local` (2026-07-13). Still needs
+  adding to Vercel's env vars; consider rotating it in Missive's settings
+  since it was pasted directly into a chat session.
+- `SUPABASE_SERVICE_ROLE_KEY` — used by `src/lib/supabase/admin.ts` for the
+  Phase 6 admin-invite feature (`/api/admin/invite`). **Not currently set in
+  `.env.local` as of 2026-07-13** — that route throws until it's added, from
+  Supabase → Project Settings → API. Must stay server-only; it bypasses RLS
+  entirely — never expose it to the client, never log it.
 
 ## Commands
 

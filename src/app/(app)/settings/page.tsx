@@ -1,20 +1,35 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getSettings, saveSettings, type AppSettings } from "@/lib/settings";
+import { getSettings, saveSettings, applyTheme, type AppSettings, type Theme } from "@/lib/settings";
+import { getGlobalSettings, saveGlobalSettings, getMyPrompt, saveMyPrompt, type GlobalSettings } from "@/lib/app-settings";
 import { getProfile, saveProfile } from "@/lib/profile";
+import { createClient } from "@/lib/supabase/client";
 import { Avatar, AVATAR_PRESETS } from "@/components/avatar";
+import type { Role } from "@/lib/roles";
 
 export default function SettingsPage() {
   const [s, setS] = useState<AppSettings>({
     postsPerDomain: 3,
     concurrency: 8,
     aiDefault: false,
-    defaultPrompt: "",
-    autoIndexCheck: true,
-    autoIndexSubmit: false,
+    theme: "light",
   });
   const [saved, setSaved] = useState(false);
+
+  // Global (admin-write, everyone-read)
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [global, setGlobal] = useState<GlobalSettings>({ autoIndexCheck: true, autoIndexSubmit: false, backlinkAutoSync: true });
+  const [globalSaved, setGlobalSaved] = useState(false);
+  const [globalErr, setGlobalErr] = useState<string | null>(null);
+
+  // Which sections are relevant to this role — mirrors the sidebar's live route_access check
+  const [canSearch, setCanSearch] = useState(false);
+  const [canIndex, setCanIndex] = useState(false);
+
+  // Per-user default prompt
+  const [prompt, setPrompt] = useState("");
+  const [promptSaved, setPromptSaved] = useState(false);
 
   // Profile
   const [email, setEmail] = useState("");
@@ -23,7 +38,33 @@ export default function SettingsPage() {
   const [profSaved, setProfSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setS(getSettings()); void loadProfile(); }, []);
+  useEffect(() => {
+    setS(getSettings());
+    void loadProfile();
+    void getGlobalSettings().then(setGlobal);
+    void getMyPrompt().then(setPrompt);
+    void (async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [{ data: prof }, { data: accessRows }] = await Promise.all([
+        supabase.from("profiles").select("role").eq("user_id", user.id).maybeSingle(),
+        supabase.from("route_access").select("route, roles"),
+      ]);
+      const role = (prof?.role as Role) ?? "content";
+      setIsAdmin(role === "admin");
+      const access: Record<string, Role[]> = {};
+      (accessRows ?? []).forEach((r) => { access[r.route] = r.roles as Role[]; });
+      setCanSearch(role === "admin" || !!access["/search"]?.includes(role) || !!access["/bulk"]?.includes(role));
+      setCanIndex(
+        role === "admin" ||
+        !!access["/insertion"]?.includes(role) ||
+        !!access["/insertion-log"]?.includes(role) ||
+        !!access["/index-check"]?.includes(role)
+      );
+    })();
+  }, []);
+
   async function loadProfile() {
     const { email, profile } = await getProfile();
     setEmail(email); setName(profile.display_name); setAvatar(profile.avatar || "preset:1");
@@ -59,6 +100,24 @@ export default function SettingsPage() {
     saveSettings(next);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
+  }
+
+  function setTheme(theme: Theme) {
+    persist({ ...s, theme });
+    applyTheme(theme);
+  }
+
+  async function persistGlobal(next: GlobalSettings) {
+    setGlobal(next);
+    setGlobalErr(null);
+    const res = await saveGlobalSettings(next);
+    if (!res.ok) { setGlobalErr(res.error || "Failed to save — admin only."); return; }
+    setGlobalSaved(true); setTimeout(() => setGlobalSaved(false), 1500);
+  }
+
+  async function persistPrompt() {
+    await saveMyPrompt(prompt);
+    setPromptSaved(true); setTimeout(() => setPromptSaved(false), 1500);
   }
 
   return (
@@ -105,7 +164,24 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="card p-6 space-y-6">
+      <div className="card p-6 mb-6">
+        <div className="eyebrow mb-4">Appearance</div>
+        <Field label="Theme" hint="Applies immediately, saved per browser.">
+          <div className="inline-flex p-1 rounded-lg border border-[var(--border)] bg-[var(--panel)]">
+            {(["light", "dark", "system"] as const).map((t) => (
+              <button key={t} onClick={() => setTheme(t)}
+                className={`px-3 py-1.5 rounded-md text-xs capitalize transition ${s.theme === t ? "text-white" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
+                style={s.theme === t ? { background: "var(--grad)", fontWeight: 600 } : undefined}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </Field>
+      </div>
+
+      {canSearch && (
+      <div className="card p-6 space-y-6 mb-6">
+        <div className="eyebrow">Search defaults <span className="opacity-60 normal-case">· saved per browser</span></div>
         <Field label="Posts per domain" hint="Sample articles fetched per site (default 3).">
           <input
             type="number"
@@ -136,38 +212,55 @@ export default function SettingsPage() {
           />
         </Field>
 
-        <Field label="Auto index-check" hint="When Link-Insertion results appear, automatically check if they're indexed (uses SpeedyIndex checker tokens).">
-          <input
-            type="checkbox"
-            checked={s.autoIndexCheck}
-            onChange={(e) => persist({ ...s, autoIndexCheck: e.target.checked })}
-          />
-        </Field>
-
-        <Field label="Auto submit for indexing" hint="On doc generation, automatically submit a page that isn't indexed (uses indexer credits/tokens).">
-          <input
-            type="checkbox"
-            checked={s.autoIndexSubmit}
-            onChange={(e) => persist({ ...s, autoIndexSubmit: e.target.checked })}
-          />
-        </Field>
-
-        <div>
-          <div className="text-sm">Default prompt</div>
-          <div className="text-xs text-[var(--muted)] mt-0.5 mb-2">
-            Applied to Single and Bulk searches. Describe the posts you usually want — the AI uses it to rank and pick the best matches.
-          </div>
-          <textarea
-            value={s.defaultPrompt}
-            onChange={(e) => persist({ ...s, defaultPrompt: e.target.value })}
-            rows={3}
-            placeholder="e.g. recent editorial articles, English, skip sponsored and category pages"
-            className="input w-full px-3 py-2 text-sm resize-y"
-          />
-        </div>
-
         {saved && <p className="text-xs" style={{ color: "var(--positive)" }}>Saved.</p>}
       </div>
+      )}
+
+      {canIndex && (
+      <div className="card p-6 space-y-6 mb-6">
+        <div className="eyebrow">
+          Global indexing settings {!isAdmin && <span className="opacity-60 normal-case">· read-only, admin-controlled</span>}
+        </div>
+        <Field label="Auto index-check" hint="When Link-Insertion results appear, automatically check if they're indexed (uses SpeedyIndex checker tokens). Applies to the whole team.">
+          <input
+            type="checkbox"
+            checked={global.autoIndexCheck}
+            disabled={!isAdmin}
+            onChange={(e) => persistGlobal({ ...global, autoIndexCheck: e.target.checked })}
+          />
+        </Field>
+
+        <Field label="Auto submit for indexing" hint="On doc generation, automatically submit a page that isn't indexed (uses indexer credits/tokens). Applies to the whole team.">
+          <input
+            type="checkbox"
+            checked={global.autoIndexSubmit}
+            disabled={!isAdmin}
+            onChange={(e) => persistGlobal({ ...global, autoIndexSubmit: e.target.checked })}
+          />
+        </Field>
+
+        {globalErr && <p className="text-xs text-[var(--danger)]">{globalErr}</p>}
+        {globalSaved && <p className="text-xs" style={{ color: "var(--positive)" }}>Saved for everyone.</p>}
+      </div>
+      )}
+
+      {canSearch && (
+      <div className="card p-6">
+        <div className="eyebrow mb-2">Your default prompt</div>
+        <div className="text-xs text-[var(--muted)] mb-2">
+          Applied to your own Single and Bulk searches only. Describe the posts you usually want — the AI uses it to rank and pick the best matches.
+        </div>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onBlur={persistPrompt}
+          rows={3}
+          placeholder="e.g. recent editorial articles, English, skip sponsored and category pages"
+          className="input w-full px-3 py-2 text-sm resize-y"
+        />
+        {promptSaved && <p className="text-xs mt-2" style={{ color: "var(--positive)" }}>Saved.</p>}
+      </div>
+      )}
     </div>
   );
 }

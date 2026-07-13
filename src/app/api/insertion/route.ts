@@ -6,7 +6,7 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const gate = await requireApiRole(["admin", "order_processing"]);
+  const gate = await requireApiRole("/insertion");
   if (gate instanceof NextResponse) return gate;
 
   let body: { website?: string; anchor?: string; targetUrl?: string; prompt?: string; limit?: number };

@@ -14,7 +14,7 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireApiRole(["admin", "order_processing"]);
+  const gate = await requireApiRole("/search");
   if (gate instanceof NextResponse) return gate;
 
   let body: Body;

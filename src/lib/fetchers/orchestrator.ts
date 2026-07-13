@@ -33,7 +33,18 @@ export async function fetchSamplePosts(
   const methodUsed: FetchMethod[] = [];
   const errors: string[] = [];
 
-  const enough = () => collected.size >= limit;
+  // Date/attribute filters and prompt-based selection both discard candidates
+  // after collection. If we stop gathering at the raw `limit`, filtering runs
+  // on a pool that's already capped to the newest few posts and rarely changes
+  // the result. Widen the collection target so filters have something to work with.
+  const hasFilters = !!(
+    options.sinceDays || options.hasImage || options.hasAuthor ||
+    options.englishOnly || options.minWords || options.maxWords
+  );
+  const hasPromptOption = !!(options.prompt && options.prompt.trim());
+  const collectTarget = hasFilters || hasPromptOption ? Math.max(limit * 6, limit + 20) : limit;
+
+  const enough = () => collected.size >= collectTarget;
   const merge = (arr: Article[], method: FetchMethod) => {
     let added = 0;
     for (const a of arr) {
@@ -72,12 +83,12 @@ export async function fetchSamplePosts(
   // ---- Method 2: Sitemap ----
   if (!enough()) {
     try {
-      const entries = await fetchSitemapUrls(domain, { limit: limit * 2, timeoutMs });
+      const entries = await fetchSitemapUrls(domain, { limit: collectTarget * 2, timeoutMs });
       if (entries.length) {
         const metas = await enrichLinks(
           entries.map((e) => ({ url: e.url, lastmod: e.lastmod })),
           "sitemap",
-          limit - collected.size,
+          collectTarget - collected.size,
           timeoutMs
         );
         merge(metas, "sitemap");
@@ -94,7 +105,7 @@ export async function fetchSamplePosts(
       const metas = await enrichLinks(
         links.map((l) => ({ url: l.url, lastmod: null })),
         "homepage",
-        limit - collected.size,
+        collectTarget - collected.size,
         timeoutMs
       );
       merge(metas, "homepage");
@@ -114,7 +125,7 @@ export async function fetchSamplePosts(
         const metas = await enrichLinks(
           links.map((l) => ({ url: l.url, lastmod: null })),
           "category",
-          limit - collected.size,
+          collectTarget - collected.size,
           timeoutMs
         );
         merge(metas, "category");
@@ -128,14 +139,13 @@ export async function fetchSamplePosts(
   const filtered = applyFilters([...collected.values()], options);
 
   // ---- Verify liveness: drop dead links (404/5xx) before returning ----
-  const hasPrompt = !!(options.prompt && options.prompt.trim());
   // A prompt means "pick the best" — pull a wider pool so selection has real choice.
-  const poolTarget = hasPrompt ? Math.max(limit * 4, limit) : limit;
+  const poolTarget = hasPromptOption ? Math.max(limit * 4, limit) : limit;
   const pool = await selectLive(filtered, poolTarget, timeoutMs);
 
   // ---- Prompt-based selection (one cheap AI call; independent of full enrichment) ----
   let articles: Article[];
-  if (hasPrompt && pool.length > limit) {
+  if (hasPromptOption && pool.length > limit) {
     const { selectByPrompt } = await import("@/lib/ai/enrich");
     articles = await selectByPrompt(pool, options.prompt!, limit);
   } else {

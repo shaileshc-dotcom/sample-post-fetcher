@@ -4,7 +4,7 @@ import { useState } from "react";
 import { checkIndex, submitForIndexing } from "@/lib/hooks/useIndexCheck";
 import { createClient } from "@/lib/supabase/client";
 import { getProfile } from "@/lib/profile";
-import { getSettings } from "@/lib/settings";
+import { getGlobalSettings } from "@/lib/app-settings";
 
 interface Candidate { url: string; title: string; reason: string; score: number; wordCount: number | null; }
 type IdxMap = Record<string, "indexed" | "not indexed" | "unknown">;
@@ -87,7 +87,7 @@ export default function InsertionPage() {
       const cands: Candidate[] = data.matches || [];
       patch(order.id, { status: "found", candidates: cands, chosen: cands[0]?.url ?? null });
       // Auto index-check the results so badges show without a click.
-      if (cands.length && getSettings().autoIndexCheck) void runCheck(order.id, cands.map((c) => c.url));
+      if (cands.length && (await getGlobalSettings()).autoIndexCheck) void runCheck(order.id, cands.map((c) => c.url));
     } catch (e) {
       patch(order.id, { status: "error", error: (e as Error).message });
     }
@@ -109,13 +109,14 @@ export default function InsertionPage() {
   async function generateFor(order: Order, page: string, logMode: "single" | "skip"): Promise<ReportRow | null> {
     patch(order.id, { status: "generating", error: undefined });
     try {
+      const { autoIndexSubmit } = await getGlobalSettings();
       const res = await fetch("/api/generate-doc", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pageUrl: page, anchor: order.anchor, targetUrl: order.targetUrl,
           instruction: order.instruction, website: order.website,
           indexStatus: order.index[page] || "unknown",
-          autoSubmit: getSettings().autoIndexSubmit,
+          autoSubmit: autoIndexSubmit,
           docTitle: `Link Insertion — ${order.website || page} — ${order.anchor}`,
           logMode,
         }),
@@ -157,6 +158,9 @@ export default function InsertionPage() {
         website: `Batch · ${rows.length} docs`, anchor: `${rows.length} orders`,
         target_url: "", page_url: "", index_status: "batch", doc_url: null,
         details: rows,
+        // A batch summary row isn't a real trackable link (no real target/our
+        // URL) — it should never surface in Backlink Monitor.
+        backlink_tracked: false,
       });
       setLogMsg(`Saved 1 batch log with ${rows.length} docs to the Insertion Log.`);
     } catch { /* non-critical */ }

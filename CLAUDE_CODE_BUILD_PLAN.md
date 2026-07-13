@@ -148,82 +148,167 @@ Not done as part of this phase (unchanged from the original scope): top bar
 sidebar team-based regrouping/renaming (that's Phase 3).
 
 ## Phase 3 — Reorganize navigation by team + rename features
-**Status: `[ ]` not started** (depends on Phase 1's role model)
+**Status: `[x]` done**
 
-Group the sidebar by team, rename vague items:
-- **Order Processing**: "Publisher Sample Search" (was single search), "Bulk
-  Publisher Search" (was bulk), "Indexing", "Link Insertion", "Doc Studio",
-  "Missive Search".
-- **SEO**: "Article Generator", "Backlink Monitor", "Doc Studio".
-- **Admin**: "Team & Access", plus all sections.
-- Only show sections the current role can access.
+`src/components/sidebar.tsx` groups items under **Scout** (Dashboard,
+Publisher Sample Search, Bulk Publisher Search), **Placement** (Link
+Insertion, Insertion Log, Indexing, Missive Search), **SEO** (Article
+Generator, Backlink Monitor), **Workspace** (History, Doc Studio, Settings),
+**Admin** (Team & Access). Section visibility is now driven live from
+`route_access` (see Phase 11) rather than a static per-role list — the
+sidebar fetches `route → roles` on mount and filters both sections and items
+down to what the current role can see, so a route added/removed from the
+admin-editable matrix updates the sidebar immediately with no redeploy.
 
 ## Phase 4 — Fix bulk & single search filters (date + category)
-**Status: `[ ]` not started**
+**Status: `[x]` done (2026-07-13)**
 
-Known bug: date preset (e.g. "older than 3 months", last 7/30/90/365 days) and
-category filter don't affect results — results ignore them and always return
-latest / all categories. Trace how `sinceDays`/date range and category flow
-from UI → hooks (`useBulkRunner.ts`) → `/api/fetch` → fetchers, and fix. Add a
-check or logging that proves the filter is actually applied.
+Root cause found: `src/lib/fetchers/orchestrator.ts`'s collection loop
+stopped gathering candidates as soon as it hit the raw `limit` (e.g. 3),
+*before* any date/attribute filter or the AI category-prompt selection ran.
+Since RSS/sitemap return newest-first, that raw batch was always just "the
+latest few posts" — filtering it afterward rarely changed anything, and
+prompt-based category selection (`selectByPrompt`) only engages when
+`pool.length > limit`, which was almost never true since the pool was never
+bigger than the raw limit. Same bug, both symptoms.
+
+Fix: added a `collectTarget` that widens to `max(limit*6, limit+20)` whenever
+a date/attribute filter or a prompt (category folds into the prompt string)
+is active, so sitemap/homepage/category methods keep pulling candidates for
+filtering/AI-selection to actually have something to work with. Bulk Search
+inherits the fix automatically — it calls the same `/api/fetch` →
+`fetchSamplePosts` path (`src/lib/bulk-run-context.tsx`).
+
+Verified directly against live domains (bypassing UI/auth, calling
+`fetchSamplePosts` in isolation): `sinceDays=1` on techcrunch.com correctly
+narrowed 5→1 result vs. unfiltered; `hasImage=true` correctly returned only
+image-bearing posts, reaching further back in time to find enough; prompt/
+category selection now actually runs (`pool.length > limit`, `truncated:
+true`) where before it was structurally skipped.
 
 ## Phase 5 — Settings: admin-controlled vs per-user
-**Status: `[ ]` not started**
+**Status: `[x]` done**
 
-Today, ALL settings (`postsPerDomain`, `concurrency`, `aiDefault`,
-`defaultPrompt`, `autoIndexCheck`, `autoIndexSubmit`) live in `localStorage`
-per-browser (see `src/lib/settings.ts`) — nothing is in Supabase. Split into:
-1. **Global, admin-only**: `autoIndexCheck`, `autoIndexSubmit` toggles. Stored
-   in a settings table row. Non-admins can view read-only.
-2. **Per-user**: `defaultPrompt`. Stored per `user_id`.
-Enforce with RLS (only admin writes global settings; users write only their
-own row). Update Settings UI to reflect who can edit what.
+`src/lib/app-settings.ts` adds the Supabase-backed layer alongside the
+existing `localStorage` one (`src/lib/settings.ts`, unchanged —
+`postsPerDomain`/`concurrency`/`aiDefault`/`theme` stay per-browser):
+- **Global, admin-only**: `autoIndexCheck`, `autoIndexSubmit` — singleton row
+  in `app_settings` (id=1). Everyone can read; only `admin` can write (RLS).
+- **Per-user**: `defaultPrompt` — one row per user in `user_settings`, owner
+  RLS. Settings page (`src/app/(app)/settings/page.tsx`) shows the global
+  toggles read-only for non-admins and editable for admins, plus the
+  per-user prompt field for everyone.
 
 ## Phase 6 — Admin panel (user & access management)
-**Status: `[ ]` not started** (depends on Phase 1)
+**Status: `[x]` done**
 
-Admin-only panel: list all members (role/team/active status); create a new
-user (invite by email via Supabase Auth admin API, in a secure server route,
-using the **service-role key** — never exposed to the client); edit a
-member's role/team; deactivate/reactivate; simple access matrix showing which
-role sees which sections. Server-side guards so only admins can call these
-routes.
+`src/app/(app)/admin/page.tsx` — member list with role/team/active editing,
+email invite via `/api/admin/invite` (Supabase Auth admin API, service-role
+key, server-only — invited users are promoted + activated immediately
+instead of landing on `/pending`), and a **live access-control matrix**
+(route × role checkboxes, backed by `route_access`) that replaced the old
+hardcoded `ROUTE_ROLES` constant entirely — see Phase 11 for why that
+replacement happened and how it's wired through the rest of the app. Admin
+also hosts prompt-template upload for the Article Generator (Phase 9).
 
 ## Phase 7 — Doc Studio additions
-**Status: `[ ]` not started**
+**Status: `[x]` done**
 
-- **A**: "HTML → Google Doc" tab — paste HTML, convert to a Google Doc in the
-  Shared Drive with house style (Outfit; H1 23 / H2 18 / H3 15 bold; body 14;
-  justified), preserving lists/tables/links/bold/italic. Return the Doc link.
-- **B**: Improve "Word → Google Doc" — drag-and-drop upload for one or many
-  `.docx` files, export option (CSV of source filename → resulting Google Doc
-  URL), per-file progress.
+`src/app/(app)/doc-studio/page.tsx` now has three tabs:
+- **Doc Formatter** (pre-existing) — copy/paste house-style formatting.
+- **Word → Google Doc** — drag-and-drop upload for one or many `.docx`
+  files (`dragOver` state + drop zone), CSV import/export of
+  filename → resulting Doc URL, per-file status column.
+- **HTML → Google Doc** (new) — paste HTML + a title, converts via Google
+  Drive's HTML import (preserves headings/lists/tables/links/bold/italic),
+  then applies the same house style as the other tabs. Returns the Doc link.
 
-## Phase 8 — Missive Search
-**Status: `[ ]` not started — blocked on `MISSIVE_API_TOKEN`**
+## Phase 8 — Missive Search + Send Email
+**Status: `[x]` done — scope expanded beyond the original plan**
 
-Add "Missive Search" under Order Processing. Using the Missive API
-(`MISSIVE_API_TOKEN`, server-side only), let users search the inbox for an
-exact email/word/phrase and return only threads that actually contain that
-term (precise match, not Missive's fuzzy search). Show subject, participants,
-date, link to open in Missive. Handle pagination and rate limits.
+Beyond the originally-planned inbox search, this session also added a
+**Send Email** tool and a **Send History** log (not in the original plan —
+added because Order Processing needed to send templated emails to vendors
+from inside the app, not just search).
+
+- `src/lib/missive.ts` — `searchInbox()` (exact-email via Missive's contact
+  filter; word/phrase via a best-effort scan of recent conversations'
+  subjects/previews, since Missive's REST API has no full-text search
+  endpoint), `sendBulkEmail()` (one separate email per recipient via
+  `POST /drafts`, rate-limited to stay under Missive's 300 req/min).
+- **404 bug found and fixed (2026-07-13)**: `listOrganizations()`/
+  `listSharedLabels()` called `GET /v1/organizations` and
+  `GET /v1/shared_labels` — neither exists in Missive's REST API (confirmed
+  against their docs). Organizations and shared labels are only ever
+  *embedded* fields on conversation objects. Replaced both with a single
+  `listMeta()` that derives orgs/labels from a page of recent conversations.
+  Verified against the real Missive account post-fix: found the real org
+  (`AMRYTT MEDIA LLC`) and 13 real shared labels including "Vendor Response".
+  Search itself was already working correctly against the real API — the
+  404 the user saw was from this meta call (which failed silently in the UI
+  before this fix; the Send Email tab's org/label dropdowns now show a
+  visible error and a manual-paste fallback if Missive's API is unreachable).
+- **Send History log**: `missive_send_log` table (see Phase 11 migration) —
+  every send records recipient, subject, resulting conversation ID (captured
+  from `POST /drafts`'s response, which returns `{drafts:{id,conversation}}`
+  — no follow-up GET needed), label applied, and who ran it. New "Send
+  History" tab on `/missive` lists it with a link to open the conversation.
 
 ## Phase 9 — SEO: Article Generator
-**Status: `[ ]` not started — blocked on prompt template files**
+**Status: `[x]` done — templates are DB-uploaded, not repo files**
 
-Add "Article Generator" under SEO. Load prompt templates from `/prompts` (not
-yet in the repo). User picks a template, fills inputs (topic, keywords, tone,
-length, target URL/anchor), generates via OpenAI, previews, exports to a
-Google Doc via Doc Studio's formatter. Save generations to history.
+Deviated from the original plan (load templates from a `/prompts` folder in
+the repo) because that would require a deploy every time a template changes.
+Instead: admins upload a `.docx` or paste plain text via Team & Access →
+Prompt Templates (`/api/admin/prompt-templates`, `mammoth` for `.docx` text
+extraction), stored in `prompt_templates` (readable by everyone with Article
+Generator access, admin-only write). `src/app/(app)/article-generator/page.tsx`
+picks a template, fills inputs (topic, keywords, tone, length, target
+URL/anchor), generates via OpenAI (`src/lib/article-generator.ts`), previews,
+exports to a Google Doc through Doc Studio's formatter
+(`src/lib/google-formatter.ts`), and logs the generation to
+`article_generations`.
 
 ## Phase 10 — SEO: Backlink Monitor
-**Status: `[ ]` not started**
+**Status: `[x]` done**
 
-For each completed link insertion, store target page URL, our destination
-URL, anchor. Checker fetches each page and reports: backlink present?
-dofollow/nofollow? index status (via existing index checker). Dashboard with
-status badges, last-checked time, re-check button, CSV export. Respect rate
-limits; note that some sites block fetching.
+`src/app/(app)/backlink-monitor/page.tsx` reads every team member's
+`insertion_history` rows (not just the signed-in user's own — see Phase 11's
+admin/seo team-read policy) and shows target page URL, our destination URL,
+anchor, backlink present/dofollow, and index status. Re-check button hits
+`/api/backlink-check`, which fetches the target page with `cheerio`, looks
+for an anchor matching the target URL/host+path, and writes
+`link_present`/`link_dofollow`/`last_checked_at` back onto the row. CSV
+export via the shared export utility.
+
+## Phase 11 — Access-control matrix + global notifications
+**Status: `[x]` done — not in the original plan, added this session**
+
+Two structural additions that came up while building Phases 6–10:
+
+1. **Live access-control matrix.** The static `ROUTE_ROLES` constant in
+   `src/lib/roles.ts` was replaced by an admin-editable `route_access` table
+   (route → roles\[\]), read by `src/lib/route-access.ts` (server,
+   request-memoized, fails closed to `["admin"]` if a row is missing or the
+   query errors) and directly by the sidebar/topbar/dashboard/admin pages on
+   the client. `admin` is always included in the effective role list
+   regardless of what's stored, both in the read helper and in the admin UI
+   (which won't let you uncheck it) — defense in depth so editing the matrix
+   can never lock every admin out.
+2. **Global bulk-scan-completion notifications.** Bulk Search's runner moved
+   from a page-local hook (`useBulkRunner.ts`, deleted) to
+   `src/lib/bulk-run-context.tsx`, a React Context mounted at the app-shell
+   level. This means a bulk scan keeps running (and its completion toast —
+   `src/components/bulk-completion-toast.tsx` — still fires) even if the
+   user navigates away from `/bulk` while it's running.
+
+See `supabase/migration_phase11_access_and_features.sql` for the full,
+consolidated, idempotent migration — covers `route_access` (+ seed),
+`app_settings`, `user_settings`, `insertion_history`'s new backlink columns
+and admin/seo team-read policy, `prompt_templates`, `article_generations`,
+and `missive_send_log`. **Not yet run against the live database as of this
+doc update — confirm with the user before assuming any of Phases 5/6/8-11
+work end-to-end.**
 
 ## Global — Import/Export everywhere
 **Status: `[ ]` not started — run after the relevant phases land**
@@ -235,10 +320,20 @@ utility.
 
 ---
 
-## Open items needing input before their phase
+## Open items
 
-- **Phase 8**: `MISSIVE_API_TOKEN` — to be added directly to `.env.local` and
-  Vercel env vars, not pasted in chat.
-- **Phase 9**: prompt template files — to be added to `/prompts` in the repo.
-- **Phase 6**: Supabase **service-role key** — to be added directly to
-  `.env.local` and Vercel env vars, not pasted in chat.
+- **Run `supabase/migration_phase11_access_and_features.sql`** in the
+  Supabase SQL editor — nothing from Phases 5, 6, 9, 10, or 11 works against
+  the live database until this has run. Confirm with the user whether an
+  earlier, unsaved version of this migration (pasted directly in a prior
+  chat, never committed to a file) was already run — if so, diff carefully
+  before re-running, since this version additionally adds `missive_send_log`
+  and the `insertion_history` admin/seo team-read policy.
+- **`MISSIVE_API_TOKEN`** — added to local `.env.local` this session (pasted
+  directly in chat by the user). Still needs to be added to Vercel's env
+  vars, and the user was advised to consider rotating it in Missive's
+  settings since it's now in a chat transcript.
+- **`SUPABASE_SERVICE_ROLE_KEY` is not set** in `.env.local` (verified
+  2026-07-13) — `/api/admin/invite` (`src/lib/supabase/admin.ts`) throws at
+  runtime until it's added from Supabase → Project Settings → API, and again
+  in Vercel's env vars before deploying.

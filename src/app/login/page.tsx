@@ -22,7 +22,7 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -34,7 +34,13 @@ export default function LoginPage() {
   async function submit() {
     setLoading(true); setError(null); setMsg(null);
     try {
-      if (mode === "signin") {
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+        });
+        if (error) throw error;
+        setMsg("If an account exists for that email, a reset link is on its way.");
+      } else if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         router.push("/"); router.refresh();
@@ -108,20 +114,30 @@ export default function LoginPage() {
         <div className="auth-card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/icon.png" alt="GUESTPOSTLINKS" className="mark" />
-          <h2 className="auth-title">{mode === "signin" ? "Sign in" : "Create your account"}</h2>
+          <h2 className="auth-title">{mode === "signin" ? "Sign in" : mode === "signup" ? "Create your account" : "Reset your password"}</h2>
           <p className="auth-sub">GUESTPOSTLINKS · internal tools</p>
 
-          <button
-            type="button"
-            className="google-btn"
-            onClick={signInWithGoogle}
-            disabled={googleLoading || loading}
-          >
-            {googleLoading ? <span className="spin-icon" aria-hidden="true" /> : <GoogleGlyph />}
-            {googleLoading ? "Redirecting…" : "Continue with Google"}
-          </button>
+          {mode !== "forgot" && (
+            <>
+              <button
+                type="button"
+                className="google-btn"
+                onClick={signInWithGoogle}
+                disabled={googleLoading || loading}
+              >
+                {googleLoading ? <span className="spin-icon" aria-hidden="true" /> : <GoogleGlyph />}
+                {googleLoading ? "Redirecting…" : "Continue with Google"}
+              </button>
 
-          <div className="divider"><span>or continue with email</span></div>
+              <div className="divider"><span>or continue with email</span></div>
+            </>
+          )}
+
+          {mode === "forgot" && (
+            <p className="auth-sub" style={{ margin: "0 0 20px" }}>
+              Enter your account email and we&apos;ll send you a link to set a new password.
+            </p>
+          )}
 
           <div className="fields">
             <label className="field">
@@ -130,33 +146,52 @@ export default function LoginPage() {
                 <MailGlyph className="input-icon" />
                 <input
                   type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && mode === "forgot" && submit()}
                   placeholder="you@amrytt.com" className="text-input" autoComplete="email" autoFocus
                 />
               </span>
             </label>
-            <label className="field">
-              <span className="field-label">Password</span>
-              <span className="input-wrap">
-                <LockGlyph className="input-icon" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="••••••••••"
-                  className="text-input has-trailing"
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                />
-                <button
-                  type="button" className="eye-btn"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOffGlyph /> : <EyeGlyph />}
-                </button>
-              </span>
-            </label>
-            <button onClick={submit} disabled={loading || googleLoading || !email || !password} className="submit-btn">
+            {mode !== "forgot" && (
+              <label className="field">
+                <span className="field-label">Password</span>
+                <span className="input-wrap">
+                  <LockGlyph className="input-icon" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="••••••••••"
+                    className="text-input has-trailing"
+                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  />
+                  <button
+                    type="button" className="eye-btn"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOffGlyph /> : <EyeGlyph />}
+                  </button>
+                </span>
+              </label>
+            )}
+            {mode === "signin" && (
+              <button
+                type="button"
+                onClick={() => { setMode("forgot"); setError(null); setMsg(null); }}
+                className="switch"
+                style={{ margin: 0, alignSelf: "flex-end" }}
+              >
+                Forgot password?
+              </button>
+            )}
+            <button
+              onClick={submit}
+              disabled={loading || googleLoading || !email || (mode !== "forgot" && !password)}
+              className="submit-btn"
+            >
               {loading && <span className="spin-icon light" aria-hidden="true" />}
-              {loading ? (mode === "signin" ? "Signing in…" : "Creating account…") : mode === "signin" ? "Sign in" : "Create account"}
+              {loading
+                ? (mode === "signin" ? "Signing in…" : mode === "signup" ? "Creating account…" : "Sending link…")
+                : (mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link")}
             </button>
           </div>
 
@@ -164,10 +199,15 @@ export default function LoginPage() {
           {msg && <p className="note note-ok" role="status">{msg}</p>}
 
           <button
-            onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); setMsg(null); }}
+            onClick={() => {
+              setMode(mode === "signup" ? "signin" : mode === "forgot" ? "signin" : "signup");
+              setError(null); setMsg(null);
+            }}
             className="switch"
           >
-            {mode === "signin" ? <>Need an account? <span className="switch-accent">Create one</span></> : <>Have an account? <span className="switch-accent">Sign in</span></>}
+            {mode === "signin" && <>Need an account? <span className="switch-accent">Create one</span></>}
+            {mode === "signup" && <>Have an account? <span className="switch-accent">Sign in</span></>}
+            {mode === "forgot" && <>Remembered it? <span className="switch-accent">Back to sign in</span></>}
           </button>
         </div>
       </section>

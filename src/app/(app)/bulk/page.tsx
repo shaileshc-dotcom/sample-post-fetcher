@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useBulkRunner, type BulkItem } from "@/lib/hooks/useBulkRunner";
+import { useBulkRun, type BulkItem } from "@/lib/bulk-run-context";
 import { toDomainCSV, toJSON, download, type DomainGroup } from "@/lib/export";
 import { getSettings } from "@/lib/settings";
+import { getMyPrompt } from "@/lib/app-settings";
 import { submitForIndexing } from "@/lib/hooks/useIndexCheck";
 import { CategorySelect } from "@/components/category-select";
 import { DATE_PRESETS } from "@/lib/categories";
@@ -18,9 +19,9 @@ export default function BulkPage() {
   const [sinceDays, setSinceDays] = useState<number | null>(null);
   const [filter, setFilter] = useState<"all" | "found" | "failed">("all");
   const [q, setQ] = useState("");
-  const { items, state, startedAt, start, pause, resume, cancel, retryFailed, reset } = useBulkRunner();
+  const { items, state, startedAt, start, pause, resume, cancel, retryFailed, reset } = useBulkRun();
 
-  useEffect(() => setPrompt(getSettings().defaultPrompt), []);
+  useEffect(() => { void getMyPrompt().then(setPrompt); }, []);
   const postsPerDomain = getSettings().postsPerDomain;
   const busy = state === "running" || state === "paused";
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { copyDoc, convertWordToDoc, formatDoc, getDocParagraphs, extractFileId } from "@/lib/google-formatter";
+import { copyDoc, convertWordToDoc, convertHtmlToDoc, formatDoc, getDocParagraphs, extractFileId } from "@/lib/google-formatter";
 import { classifyParagraphs } from "@/lib/ai/classify";
 import { requireApiRole } from "@/lib/api-guard";
 
@@ -7,10 +7,11 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 interface Body {
-  action: "copy" | "convert" | "format" | "copy-format";
+  action: "copy" | "convert" | "format" | "copy-format" | "convert-html";
   url?: string;
   name?: string;
   dataBase64?: string; // for convert
+  html?: string; // for convert-html
 }
 
 async function formatById(fileId: string) {
@@ -20,7 +21,7 @@ async function formatById(fileId: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireApiRole(["admin", "order_processing", "seo", "content"]);
+  const gate = await requireApiRole("/doc-studio");
   if (gate instanceof NextResponse) return gate;
 
   let body: Body;
@@ -52,6 +53,12 @@ export async function POST(req: NextRequest) {
         const copied = await copyDoc(id);
         await formatById(copied.id);
         return NextResponse.json(copied);
+      }
+      case "convert-html": {
+        if (!body.html?.trim()) return NextResponse.json({ error: "Paste some HTML first" }, { status: 400 });
+        const r = await convertHtmlToDoc(body.html, body.name || "Untitled");
+        await formatById(r.id);
+        return NextResponse.json(r);
       }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });

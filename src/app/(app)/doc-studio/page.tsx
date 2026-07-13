@@ -13,7 +13,7 @@ const fileToBase64 = (file: File) => new Promise<string>((res, rej) => {
 });
 
 export default function DocStudioPage() {
-  const [tab, setTab] = useState<"convert" | "format">("format");
+  const [tab, setTab] = useState<"convert" | "format" | "html">("format");
 
   return (
     <div>
@@ -21,22 +21,73 @@ export default function DocStudioPage() {
         <div className="eyebrow">Workspace</div>
         <h1 className="text-3xl mt-1">Doc Studio</h1>
         <p className="text-[var(--muted)] text-sm mt-2 max-w-2xl">
-          Convert Word files into Google Docs, and auto-format client docs to the house style
-          (Outfit · H1 23 · H2 18 · H3 15 · body 14 · justified) using AI.
+          Convert Word files or pasted HTML into Google Docs, and auto-format client
+          docs to the house style (Outfit · H1 23 · H2 18 · H3 15 · body 14 · justified) using AI.
         </p>
       </header>
 
       <div className="inline-flex p-1 rounded-xl border border-[var(--border)] bg-[var(--panel)] mb-6">
-        {(["format", "convert"] as const).map((t) => (
+        {(["format", "convert", "html"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm transition ${tab === t ? "text-white" : "text-[var(--muted)] hover:text-[var(--text)]"}`}
             style={tab === t ? { background: "var(--grad)", fontWeight: 600 } : undefined}>
-            {t === "format" ? "Doc Formatter" : "Word → Google Doc"}
+            {t === "format" ? "Doc Formatter" : t === "convert" ? "Word → Google Doc" : "HTML → Google Doc"}
           </button>
         ))}
       </div>
 
-      {tab === "format" ? <Formatter /> : <Converter />}
+      {tab === "format" ? <Formatter /> : tab === "convert" ? <Converter /> : <HtmlConverter />}
+    </div>
+  );
+}
+
+/* ---------------- HTML → Google Doc ---------------- */
+function HtmlConverter() {
+  const [html, setHtml] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ url: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true); setError(null); setResult(null);
+    try {
+      const res = await fetch("/api/doc", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "convert-html", html, name: name || "Untitled" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Convert failed");
+      setResult({ url: data.url });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <label className="eyebrow">Doc title</label>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Guest Post — Example Site"
+        className="input w-full px-4 py-2.5 text-sm mt-1.5 mb-4" />
+
+      <label className="eyebrow">Paste HTML</label>
+      <textarea value={html} onChange={(e) => setHtml(e.target.value)} rows={12}
+        placeholder="<h1>Title</h1>&#10;<p>Paragraph with <b>bold</b> and <a href=&quot;...&quot;>a link</a>.</p>&#10;<ul><li>List item</li></ul>"
+        className="input w-full px-4 py-3 text-sm mono resize-y mt-1.5" />
+      <p className="text-[11px] text-[var(--muted)] mt-2">
+        Headings, lists, tables, links, and bold/italic are preserved by Google Drive&apos;s import,
+        then the house style is applied automatically — same as the other tabs.
+      </p>
+
+      <div className="flex items-center gap-3 mt-4">
+        <button onClick={run} disabled={busy || !html.trim()} className="btn-primary px-5 py-2.5 text-sm">
+          {busy ? "Converting…" : "Convert to Google Doc"}
+        </button>
+        {result && <a href={result.url} target="_blank" rel="noreferrer" className="pill pill-pos mono">Open Doc ↗</a>}
+        {error && <span className="text-xs" style={{ color: "var(--danger)" }}>{error}</span>}
+      </div>
     </div>
   );
 }
@@ -132,9 +183,28 @@ function Converter() {
   const [files, setFiles] = useState<File[]>([]);
   const [alsoFormat, setAlsoFormat] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
+  function addFiles(list: FileList | File[]) {
+    const next = Array.from(list).filter((f) => /\.docx?$/i.test(f.name));
+    setFiles((prev) => [...prev, ...next]);
+  }
   function pick(e: React.ChangeEvent<HTMLInputElement>) {
-    setFiles(Array.from(e.target.files || []).filter((f) => /\.docx?$/i.test(f.name)));
+    if (e.target.files) addFiles(e.target.files);
+    e.target.value = "";
+  }
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragOver(false);
+    if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  }
+
+  function exportCsv() {
+    const header = ["Source Filename", "Google Doc URL", "Status"];
+    const csv = [header, ...rows.map((r) => [r.name || r.input, r.url || "", r.status])]
+      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `word-to-doc-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
   }
 
   async function run() {
@@ -167,16 +237,30 @@ function Converter() {
     <>
       <div className="card p-5 mb-5">
         <label className="eyebrow">Upload Word files (.docx) — single or multiple</label>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <label className="btn-ghost px-4 py-2 text-sm cursor-pointer">Choose files<input type="file" accept=".docx,.doc" multiple onChange={pick} className="hidden" /></label>
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className={`mt-2 rounded-xl border-2 border-dashed p-6 text-center transition ${dragOver ? "border-[var(--accent-strong)] bg-[var(--accent-soft)]" : "border-[var(--border)]"}`}
+        >
+          <p className="text-sm text-[var(--muted)] mb-2">Drag &amp; drop .docx files here, or</p>
+          <label className="btn-ghost px-4 py-2 text-sm cursor-pointer inline-block">
+            Choose files<input type="file" accept=".docx,.doc" multiple onChange={pick} className="hidden" />
+          </label>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <span className="text-xs text-[var(--muted)] mono">{files.length} file(s) selected</span>
+          {files.length > 0 && (
+            <button onClick={() => setFiles([])} className="text-xs text-[var(--muted)] hover:text-[var(--text)] underline">clear</button>
+          )}
           <label className="flex items-center gap-2 text-xs text-[var(--muted)] cursor-pointer ml-auto">
             <input type="checkbox" checked={alsoFormat} onChange={(e) => setAlsoFormat(e.target.checked)} />
             Auto-format after convert
           </label>
         </div>
-        <div className="mt-4">
+        <div className="flex items-center gap-2 mt-4">
           <button onClick={run} disabled={busy || !files.length} className="btn-primary px-5 py-2.5 text-sm">{busy ? "Converting…" : "Convert to Google Docs"}</button>
+          <button onClick={exportCsv} disabled={!rows.length} className="btn-ghost px-4 py-2 text-sm">Export CSV</button>
         </div>
       </div>
 

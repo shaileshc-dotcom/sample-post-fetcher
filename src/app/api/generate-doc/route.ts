@@ -24,7 +24,7 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireApiRole(["admin", "order_processing"]);
+  const gate = await requireApiRole("/insertion");
   if (gate instanceof NextResponse) return gate;
 
   let body: Body;
@@ -100,7 +100,10 @@ async function recordInsertion(website: string, anchor: string, targetUrl: strin
     const supabase = await createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: prof } = await supabase.from("profiles").select("display_name").eq("user_id", user.id).maybeSingle();
+    const [{ data: prof }, { data: settings }] = await Promise.all([
+      supabase.from("profiles").select("display_name").eq("user_id", user.id).maybeSingle(),
+      supabase.from("app_settings").select("backlink_auto_sync").eq("id", 1).maybeSingle(),
+    ]);
     const runBy = prof?.display_name || user.email || "";
     await supabase.from("insertion_history").insert({
       user_id: user.id,
@@ -111,6 +114,7 @@ async function recordInsertion(website: string, anchor: string, targetUrl: strin
       page_url: pageUrl,
       index_status: indexStatus,
       doc_url: docUrl,
+      backlink_tracked: settings?.backlink_auto_sync ?? true,
     });
   } catch {
     /* non-critical */
