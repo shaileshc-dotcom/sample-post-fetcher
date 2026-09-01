@@ -9,10 +9,11 @@ export interface AppSettings {
   concurrency: number;
   aiDefault: boolean;
   theme: Theme;
+  minIndexedPages: number; // Domain Pages: eligibility threshold (indexed pages)
 }
 
 const KEY = "sps_settings";
-const DEFAULTS: AppSettings = { postsPerDomain: 3, concurrency: 8, aiDefault: false, theme: "light" };
+const DEFAULTS: AppSettings = { postsPerDomain: 3, concurrency: 8, aiDefault: false, theme: "light", minIndexedPages: 30 };
 
 export function getSettings(): AppSettings {
   if (typeof window === "undefined") return DEFAULTS;

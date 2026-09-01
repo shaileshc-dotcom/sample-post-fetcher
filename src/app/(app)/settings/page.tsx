@@ -14,6 +14,7 @@ export default function SettingsPage() {
     concurrency: 8,
     aiDefault: false,
     theme: "light",
+    minIndexedPages: 30,
   });
   const [saved, setSaved] = useState(false);
 
@@ -239,8 +240,19 @@ export default function SettingsPage() {
           />
         </Field>
 
+        <Field label="Domain Pages: min indexed pages" hint="Eligibility threshold on the Indexing → Domain Pages tab (default 30). Saved per browser.">
+          <input
+            type="number"
+            min={0}
+            value={s.minIndexedPages}
+            onChange={(e) => persist({ ...s, minIndexedPages: Math.max(0, Number(e.target.value)) })}
+            className="input w-24 px-3 py-1.5 text-sm mono"
+          />
+        </Field>
+
         {globalErr && <p className="text-xs text-[var(--danger)]">{globalErr}</p>}
         {globalSaved && <p className="text-xs" style={{ color: "var(--positive)" }}>Saved for everyone.</p>}
+        {saved && <p className="text-xs" style={{ color: "var(--positive)" }}>Saved.</p>}
       </div>
       )}
 

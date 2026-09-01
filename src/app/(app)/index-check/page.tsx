@@ -4,13 +4,29 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useIndexCheck, submitForIndexing, checkIndex } from "@/lib/hooks/useIndexCheck";
 import { createClient } from "@/lib/supabase/client";
+import { getSettings, saveSettings } from "@/lib/settings";
+import { download } from "@/lib/export";
 
 interface Task {
   id: string; url: string; task_id: string; source: string; status: string; created_at: string;
 }
 
+// Domain Pages: time windows shown as columns (values keyed by these in the API response).
+const WINDOWS = [
+  { key: "any", label: "Any time" },
+  { key: "last_day", label: "Past 24h" },
+  { key: "last_week", label: "Past week" },
+  { key: "last_month", label: "Past month" },
+  { key: "last_year", label: "Past year" },
+] as const;
+interface Coverage { domain: string; counts: Record<string, number | null>; error?: string }
+
 const serpUrl = (u: string) => `https://www.google.com/search?q=${encodeURIComponent(`site:${u}`)}`;
 const parseUrls = (raw: string) => [...new Set(raw.split(/[\n,]/).map((u) => u.trim()).filter(Boolean))];
+const domainOf = (u: string) => {
+  try { return new URL(u.startsWith("http") ? u : "https://" + u).hostname.replace(/^www\./, ""); }
+  catch { return ""; }
+};
 
 const SOURCE_STYLE: Record<string, string> = {
   single: "pill-amber", bulk: "pill-warn", insertion: "pill-pos", manual: "pill-mut",
@@ -20,24 +36,49 @@ export default function IndexAndTasksPage() {
   const [tab, setTab] = useState<"check" | "submit" | "coverage">("check");
   const idx = useIndexCheck();
 
-  // Domain coverage (Google Custom Search — indexed pages per domain)
+  // Domain Pages (SearchApi — indexed pages per domain, with time windows + eligibility)
   const [covRaw, setCovRaw] = useState("");
   const covDomains = parseUrls(covRaw);
-  const [covResults, setCovResults] = useState<{ domain: string; count: number | null; error?: string }[]>([]);
+  const [breakdown, setBreakdown] = useState(false);
+  const [minPages, setMinPages] = useState(30);
+  const [covResults, setCovResults] = useState<Coverage[]>([]);
   const [covLoading, setCovLoading] = useState(false);
   const [covErr, setCovErr] = useState<string | null>(null);
+  useEffect(() => { setMinPages(getSettings().minIndexedPages); }, []);
+
   async function runCoverage() {
     if (!covDomains.length) return;
     setCovLoading(true); setCovResults([]); setCovErr(null);
     try {
       const res = await fetch("/api/index-check", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "site-count", domains: covDomains }),
+        body: JSON.stringify({ action: "site-count", domains: covDomains, breakdown }),
       });
       const data = await res.json();
       if (data?.error) setCovErr(data.error);
-      else setCovResults(data.counts || []);
+      else setCovResults((data.coverage as Coverage[]) || []);
     } catch (e) { setCovErr((e as Error).message); } finally { setCovLoading(false); }
+  }
+  const isEligible = (c: Coverage) => (c.counts?.any ?? 0) >= minPages;
+  function saveMinPages(v: number) {
+    setMinPages(v);
+    saveSettings({ ...getSettings(), minIndexedPages: v });
+  }
+  function exportCoverage(which: "eligible" | "ineligible" | "all") {
+    const rows = covResults.filter((c) => which === "all" ? true : which === "eligible" ? isEligible(c) : !isEligible(c));
+    if (!rows.length) return;
+    const header = ["Domain", ...WINDOWS.map((w) => w.label), "Eligible", `Min pages (${minPages})`];
+    const lines = rows.map((c) =>
+      [c.domain, ...WINDOWS.map((w) => c.counts?.[w.key] ?? ""), isEligible(c) ? "yes" : "no", minPages].join(","),
+    );
+    download(`domain-pages-${which}.csv`, [header.join(","), ...lines].join("\n"), "text/csv");
+  }
+  // Flow: carry the INDEXED domains from Check Index over to Domain Pages.
+  function sendIndexedToCoverage() {
+    const domains = [...new Set(idx.indexed.map(domainOf).filter(Boolean))];
+    if (!domains.length) return;
+    setCovRaw(domains.join("\n"));
+    setTab("coverage");
   }
 
   // Balance
@@ -175,10 +216,22 @@ export default function IndexAndTasksPage() {
           {idx.phase === "error" && <div className="text-[var(--danger)] text-sm mt-4">{idx.error} <button onClick={idx.reset} className="btn-ghost text-xs px-3 py-1.5 ml-3">Reset</button></div>}
           {idx.phase === "done" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-5">
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className="pill pill-pos mono">{idx.indexed.length} indexed</span>
                 <span className="pill pill-warn mono">{idx.unindexed.length} not indexed</span>
-                <button onClick={idx.reset} className="btn-ghost text-xs px-3 py-1.5 ml-auto">Clear</button>
+                <div className="ml-auto flex items-center gap-2">
+                  {idx.indexed.length > 0 && (
+                    <button onClick={sendIndexedToCoverage} className="btn-primary text-xs px-3 py-1.5">
+                      Send {idx.indexed.length} indexed → Domain Pages →
+                    </button>
+                  )}
+                  <button
+                    onClick={() => download("index-check.csv",
+                      ["URL,Status", ...idx.indexed.map((u) => `${u},indexed`), ...idx.unindexed.map((u) => `${u},not_indexed`)].join("\n"),
+                      "text/csv")}
+                    className="btn-ghost text-xs px-3 py-1.5">Export CSV</button>
+                  <button onClick={idx.reset} className="btn-ghost text-xs px-3 py-1.5">Clear</button>
+                </div>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <UrlList title="Indexed" cls="pill-pos" urls={idx.indexed} />
@@ -205,36 +258,89 @@ export default function IndexAndTasksPage() {
         </div>
       )}
 
-      {/* Domain Pages (coverage) tab */}
+      {/* Domain Pages tab */}
       {tab === "coverage" && (
         <div className="card p-5 mb-8">
-          <textarea value={covRaw} onChange={(e) => setCovRaw(e.target.value)} rows={5}
-            placeholder={"bulkdp.com\nexample.com\nanotherdomain.com"}
+          <div className="eyebrow mb-2">Domain Pages · indexed page count (Google SERP)</div>
+          <textarea value={covRaw} onChange={(e) => setCovRaw(e.target.value)} rows={4}
+            placeholder={"guestpostlinks.net\nbulkdp.com\nexample.com"}
             className="input w-full px-4 py-3 text-sm mono resize-y" disabled={covLoading} />
-          <div className="flex items-center justify-between mt-3">
+
+          <div className="flex flex-wrap items-center gap-4 mt-3">
             <span className="text-xs text-[var(--muted)] mono">{covDomains.length} domains</span>
-            <button onClick={runCoverage} disabled={!covDomains.length || covLoading} className="btn-primary px-5 py-2.5 text-sm">
+            <label className="flex items-center gap-1.5 text-xs">
+              Min pages
+              <input type="number" value={minPages} onChange={(e) => saveMinPages(Number(e.target.value) || 0)}
+                className="input w-20 px-2 py-1 text-xs" title="Eligibility threshold — Any-time indexed pages" />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+              <input type="checkbox" checked={breakdown} onChange={(e) => setBreakdown(e.target.checked)} />
+              Time breakdown <span className="text-[var(--muted)]">({WINDOWS.length} credits/domain)</span>
+            </label>
+            <button onClick={runCoverage} disabled={!covDomains.length || covLoading} className="btn-primary px-5 py-2 text-sm ml-auto">
               {covLoading ? "Checking…" : "Get indexed page count"}
             </button>
           </div>
           <p className="text-[11px] text-[var(--muted)] mt-2">
-            Approximate pages Google has indexed per domain — the &quot;About N results&quot; for a <span className="mono">site:</span> query, via SearchApi.io.
-            <strong> 1 SearchApi credit per domain</strong> (100 free, then paid) — no SpeedyIndex credits. Counts are Google&apos;s estimate and drift slightly run-to-run.
+            Real Google <span className="mono">site:</span> counts via SearchApi.io. Any-time only = <strong>1 credit/domain</strong>; with time breakdown = <strong>{WINDOWS.length} credits/domain</strong>. No SpeedyIndex credits.
+            Eligible = Any-time pages ≥ Min pages.
+            {covDomains.length > 0 && <> · This run ≈ <strong>{covDomains.length * (breakdown ? WINDOWS.length : 1)} SearchApi credits</strong>.</>}
           </p>
+
           {covErr && <div className="text-[var(--danger)] text-sm mt-4">{covErr}</div>}
-          {covResults.length > 0 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 space-y-1.5">
-              {covResults.map((r, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm border-b border-[var(--border)] last:border-0 py-1.5">
-                  <a href={serpUrl(r.domain)} target="_blank" rel="noreferrer" className="text-[var(--muted)] hover:text-[var(--accent-strong)]" title="Open Google site: search">⌕</a>
-                  <span className="mono flex-1 truncate" title={r.domain}>{r.domain}</span>
-                  {r.error
-                    ? <span className="text-[var(--danger)] text-xs mono">{r.error}</span>
-                    : <span className="pill pill-pos mono">≈{(r.count ?? 0).toLocaleString()} pages indexed</span>}
+
+          {covResults.length > 0 && (() => {
+            const elig = covResults.filter(isEligible).length;
+            const cols = breakdown ? WINDOWS : WINDOWS.slice(0, 1);
+            return (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span className="pill pill-pos mono">{elig} eligible</span>
+                  <span className="pill pill-warn mono">{covResults.length - elig} ineligible</span>
+                  <span className="text-xs text-[var(--muted)]">(≥ {minPages} pages)</span>
+                  <div className="ml-auto flex gap-2">
+                    <button onClick={() => exportCoverage("eligible")} className="btn-ghost text-xs px-3 py-1.5">Export eligible</button>
+                    <button onClick={() => exportCoverage("ineligible")} className="btn-ghost text-xs px-3 py-1.5">Export ineligible</button>
+                    <button onClick={() => exportCoverage("all")} className="btn-ghost text-xs px-3 py-1.5">Export all</button>
+                  </div>
                 </div>
-              ))}
-            </motion.div>
-          )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[var(--muted)] border-b border-[var(--border)]">
+                        <th className="px-3 py-2 eyebrow">Domain</th>
+                        {cols.map((w) => <th key={w.key} className="px-3 py-2 eyebrow text-right">{w.label}</th>)}
+                        <th className="px-3 py-2 eyebrow text-center">Eligible</th>
+                        <th className="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {covResults.map((c, i) => {
+                        const ok = isEligible(c);
+                        return (
+                          <tr key={i} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--panel-2)]">
+                            <td className="px-3 py-2 mono truncate max-w-xs" title={c.domain}>{c.domain}</td>
+                            {cols.map((w) => (
+                              <td key={w.key} className="px-3 py-2 text-right mono">
+                                {c.error ? "—" : (c.counts?.[w.key] ?? 0).toLocaleString()}
+                              </td>
+                            ))}
+                            <td className="px-3 py-2 text-center">
+                              {c.error ? <span className="text-[var(--danger)] text-xs mono" title={c.error}>err</span>
+                                : <span className={`pill mono ${ok ? "pill-pos" : "pill-warn"}`}>{ok ? "yes" : "no"}</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <a href={serpUrl(c.domain)} target="_blank" rel="noreferrer" className="btn-ghost text-xs px-2 py-1">SERP</a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            );
+          })()}
         </div>
       )}
 

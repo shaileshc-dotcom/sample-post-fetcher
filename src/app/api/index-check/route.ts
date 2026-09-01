@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pLimit from "p-limit";
 import { siAccount, siCreateCheck, siStatus, siReport, siIndexStatus, siSubmitIndex, type SearchEngine } from "@/lib/speedyindex";
-import { siteIndexCount } from "@/lib/serp-count";
+import { siteCoverage, SITE_WINDOWS } from "@/lib/serp-count";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/api-guard";
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const gate = await requireApiRole("/index-check");
   if (gate instanceof NextResponse) return gate;
 
-  let body: { action?: string; urls?: string[]; domains?: string[]; taskId?: string; engine?: SearchEngine; source?: string };
+  let body: { action?: string; urls?: string[]; domains?: string[]; breakdown?: boolean; taskId?: string; engine?: SearchEngine; source?: string };
   try {
     body = await req.json();
   } catch {
@@ -53,14 +53,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(submit);
       }
       case "site-count": {
-        // Approximate indexed-page count per domain via Google Custom Search
-        // (free tier ~100 queries/day; 1 domain = 1 query). No SpeedyIndex credits.
+        // Indexed-page count per domain via SearchApi (Google SERP). No SpeedyIndex
+        // credits. `breakdown` adds time-window counts (6 SearchApi credits/domain
+        // instead of 1).
         const domains = [...new Set((body.domains || []).map((d) => d.trim()).filter(Boolean))];
         if (!domains.length) return NextResponse.json({ error: "No domains provided" }, { status: 400 });
-        if (domains.length > 100) return NextResponse.json({ error: "Max 100 domains per run (free-tier daily limit)" }, { status: 400 });
-        const limit = pLimit(5);
-        const counts = await Promise.all(domains.map((d) => limit(() => siteIndexCount(d))));
-        return NextResponse.json({ counts });
+        if (domains.length > 100) return NextResponse.json({ error: "Max 100 domains per run" }, { status: 400 });
+        const windows = body.breakdown ? SITE_WINDOWS : (["any"] as const);
+        const limit = pLimit(4);
+        const coverage = await Promise.all(domains.map((d) => limit(() => siteCoverage(d, windows))));
+        return NextResponse.json({ coverage });
       }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
