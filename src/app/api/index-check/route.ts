@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import pLimit from "p-limit";
 import { siAccount, siCreateCheck, siStatus, siReport, siIndexStatus, siSubmitIndex, type SearchEngine } from "@/lib/speedyindex";
+import { siteIndexCount } from "@/lib/serp-count";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/api-guard";
 
@@ -15,7 +17,7 @@ export async function POST(req: NextRequest) {
   const gate = await requireApiRole("/index-check");
   if (gate instanceof NextResponse) return gate;
 
-  let body: { action?: string; urls?: string[]; taskId?: string; engine?: SearchEngine; source?: string };
+  let body: { action?: string; urls?: string[]; domains?: string[]; taskId?: string; engine?: SearchEngine; source?: string };
   try {
     body = await req.json();
   } catch {
@@ -49,6 +51,16 @@ export async function POST(req: NextRequest) {
         const submit = await siSubmitIndex(urls, engine);
         if (submit.code === 0 && submit.data.task_id) await recordTasks(urls, submit.data.task_id, source);
         return NextResponse.json(submit);
+      }
+      case "site-count": {
+        // Approximate indexed-page count per domain via Google Custom Search
+        // (free tier ~100 queries/day; 1 domain = 1 query). No SpeedyIndex credits.
+        const domains = [...new Set((body.domains || []).map((d) => d.trim()).filter(Boolean))];
+        if (!domains.length) return NextResponse.json({ error: "No domains provided" }, { status: 400 });
+        if (domains.length > 100) return NextResponse.json({ error: "Max 100 domains per run (free-tier daily limit)" }, { status: 400 });
+        const limit = pLimit(5);
+        const counts = await Promise.all(domains.map((d) => limit(() => siteIndexCount(d))));
+        return NextResponse.json({ counts });
       }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
