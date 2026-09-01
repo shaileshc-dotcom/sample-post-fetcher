@@ -42,9 +42,32 @@ export async function fetchArticleMeta(
   base.featuredImage = meta("og:image") || meta("twitter:image");
   base.author =
     meta("article:author") || meta("author") || $('[rel="author"]').first().text().trim() || null;
+  const ld = ldInfo($);
   base.publishedDate =
-    meta("article:published_time") || meta("datePublished") || ldDate($) || null;
+    meta("article:published_time") ||
+    meta("og:article:published_time") ||
+    meta("article:modified_time") ||
+    meta("datePublished") ||
+    meta("date") ||
+    meta("dc.date") ||
+    meta("dc.date.issued") ||
+    meta("pubdate") ||
+    meta("publishdate") ||
+    meta("sailthru.date") ||
+    meta("parsely-pub-date") ||
+    $("time[datetime]").first().attr("datetime") ||
+    $('[itemprop="datePublished"]').first().attr("content") ||
+    $('[itemprop="datePublished"]').first().attr("datetime") ||
+    ld.date ||
+    null;
   base.language = $("html").attr("lang")?.split("-")[0] || null;
+
+  // Article-type classification. JSON-LD Article types are authoritative;
+  // otherwise og:type (website/product/profile => not an article). No signal
+  // leaves it undefined so the URL heuristic upstream decides.
+  const ogType = (meta("og:type") || "").toLowerCase();
+  if (ld.isArticle) base.isArticle = true;
+  else if (ogType) base.isArticle = /article/.test(ogType);
 
   const articleText = $("article").text() || $("main").text() || $("body").text();
   const words = articleText.replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length;
@@ -54,22 +77,33 @@ export async function fetchArticleMeta(
   return base;
 }
 
-function ldDate($: cheerio.CheerioAPI): string | null {
+/** Scan all JSON-LD blocks for a publish date and whether the page is an Article. */
+function ldInfo($: cheerio.CheerioAPI): { date: string | null; isArticle: boolean } {
   let date: string | null = null;
+  let isArticle = false;
   $('script[type="application/ld+json"]').each((_, el) => {
-    if (date) return;
     try {
       const data = JSON.parse($(el).contents().text());
-      const items = Array.isArray(data) ? data : [data["@graph"] ? data["@graph"] : data].flat();
-      for (const it of items) {
-        if (it?.datePublished) {
-          date = it.datePublished;
-          break;
+      const nodes: Array<Record<string, unknown>> = [];
+      const push = (d: unknown): void => {
+        if (!d) return;
+        if (Array.isArray(d)) { d.forEach(push); return; }
+        if (typeof d === "object") {
+          const o = d as Record<string, unknown>;
+          nodes.push(o);
+          if (o["@graph"]) push(o["@graph"]);
         }
+      };
+      push(data);
+      for (const node of nodes) {
+        const t = node["@type"];
+        const types = Array.isArray(t) ? t : [t];
+        if (types.some((x) => /Article|BlogPosting|NewsArticle|Report|Review/i.test(String(x)))) isArticle = true;
+        if (!date && node.datePublished) date = String(node.datePublished);
       }
     } catch {
-      /* skip */
+      /* skip malformed ld+json */
     }
   });
-  return date;
+  return { date, isArticle };
 }

@@ -24,6 +24,7 @@ export interface Article {
   statusCode: number | null;
   lastModified: string | null;
   method: FetchMethod;        // which method surfaced this article
+  isArticle?: boolean;        // true=og:type/JSON-LD says article; false=explicitly not; undefined=unknown
   ai?: ArticleAI;             // populated only when enrichment is requested
 }
 

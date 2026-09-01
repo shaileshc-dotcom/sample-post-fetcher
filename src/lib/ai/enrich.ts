@@ -107,20 +107,32 @@ export async function selectByPrompt(
         {
           role: "system",
           content:
-            "You are an editorial scout. Rank candidate articles by how well they " +
-            "match the user's request, weighing RELEVANCE first, then QUALITY " +
-            "(longer, substantive pieces with clear topics beat thin/listicle/spammy ones). " +
-            "If the request mentions quality, be strict. Return STRICT JSON " +
-            `{"indices":[...]} with the up-to-${n} best candidate indices, best first.`,
+            "You are an editorial scout. RANK the candidate articles by how well they " +
+            "match the user's request (RELEVANCE first, then quality — longer, substantive " +
+            "posts with clear topics beat thin/listicle/spammy ones). This is a RANKING task, " +
+            "not a yes/no filter: order every candidate you can. Return STRICT JSON " +
+            `{"indices":[...]} listing candidate indices ranked best-first. Return exactly ${n} ` +
+            `indices whenever at least ${n} candidates exist — put the strongest matches first ` +
+            "and fill any remaining slots with the next-best candidates. Never return fewer than " +
+            `${n} when ${n} candidates are available.`,
         },
         { role: "user", content: `REQUEST: ${prompt}\n\nCANDIDATES:\n${list}` },
       ],
     });
     const parsed = JSON.parse(res.choices[0]?.message?.content || "{}") as { indices?: number[] };
-    const picked = (parsed.indices || [])
-      .filter((i) => Number.isInteger(i) && i >= 0 && i < candidates.length)
-      .slice(0, n)
-      .map((i) => candidates[i]);
+    const orderedIdx = (parsed.indices || []).filter(
+      (i) => Number.isInteger(i) && i >= 0 && i < candidates.length
+    );
+    // Pad up to `n` with the best remaining candidates (original order) so the
+    // user always gets the count they asked for — the prompt RANKS, it doesn't
+    // silently drop results below the requested limit.
+    const seen = new Set<number>();
+    const finalIdx: number[] = [];
+    for (const i of orderedIdx) { if (!seen.has(i)) { seen.add(i); finalIdx.push(i); } }
+    for (let i = 0; i < candidates.length && finalIdx.length < n; i++) {
+      if (!seen.has(i)) { seen.add(i); finalIdx.push(i); }
+    }
+    const picked = finalIdx.slice(0, n).map((i) => candidates[i]);
     return picked.length ? picked : candidates.slice(0, n);
   } catch {
     return candidates.slice(0, n);

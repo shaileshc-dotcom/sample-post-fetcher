@@ -30,7 +30,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const options = { limit: 3, ...(body.options ?? {}) };
-    const result = await fetchSamplePosts(body.domain, options);
+    let result = await fetchSamplePosts(body.domain, options);
+
+    // Bulk scans hammer shared-host networks (common with PBNs), so a domain can
+    // come back empty purely from a transient 429 / timeout / block under load.
+    // Retry once after a short pause when the errors look transient — the site
+    // itself is fine when fetched on its own.
+    if (result.articles.length === 0 && looksTransient(result.errors)) {
+      await new Promise((r) => setTimeout(r, 1200));
+      const retry = await fetchSamplePosts(body.domain, options);
+      if (retry.articles.length > 0) result = retry;
+    }
 
     // Persist to search history unless this is part of a bulk run (bulk writes one summary row).
     if (!(options as { skipHistory?: boolean }).skipHistory) {
@@ -44,6 +54,13 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/** True when a domain's errors suggest a transient failure worth one retry. */
+function looksTransient(errors: string[]): boolean {
+  return errors.some((e) =>
+    /429|rate.?limit|503|cloudflare|timeout|ECONNABORTED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|unavailable|blocked/i.test(e)
+  );
 }
 
 async function persistHistory(domain: string, found: number, ms: number, method: string) {

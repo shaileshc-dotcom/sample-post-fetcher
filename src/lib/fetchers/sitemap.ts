@@ -15,9 +15,12 @@ interface SitemapEntry {
  */
 export async function fetchSitemapUrls(
   domain: string,
-  opts: { limit?: number; timeoutMs?: number } = {}
+  opts: { limit?: number; timeoutMs?: number; deep?: boolean } = {}
 ): Promise<SitemapEntry[]> {
-  const { limit = 50, timeoutMs = 12000 } = opts;
+  const { limit = 50, timeoutMs = 12000, deep = false } = opts;
+  // Deep mode reads more child sitemaps so we can reach OLDER posts (used by the
+  // date-spread path); normal mode stays cheap (top-3 recent child maps).
+  const maxChildren = deep ? 10 : 3;
   const base = toBaseUrl(domain);
   const candidates = [`${base}/sitemap.xml`, `${base}/sitemap_index.xml`, `${base}/sitemap-index.xml`];
 
@@ -34,7 +37,7 @@ export async function fetchSitemapUrls(
       // Prefer post/blog/article/news child sitemaps.
       const ranked = parsed.childSitemaps.sort(rankChild);
       const collected: SitemapEntry[] = [];
-      for (const child of ranked.slice(0, 3)) {
+      for (const child of ranked.slice(0, maxChildren)) {
         const childRes = await httpGet(child, { timeoutMs, accept: "application/xml,text/xml" });
         if (!childRes.ok) continue;
         collected.push(...parseSitemapXml(childRes.data).urls);
