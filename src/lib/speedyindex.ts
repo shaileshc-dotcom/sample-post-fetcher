@@ -77,9 +77,9 @@ export function siCreateCheck(urls: string[], engine: SearchEngine = "google") {
   return si<{ task_id?: string; type?: string }>(`/v2/task/${engine}/checker/create`, "POST", { urls });
 }
 
-/** Poll a task's status (is_completed, counts). */
+/** Poll a task's status (is_completed, counts, ETA). */
 export function siStatus(taskId: string, engine: SearchEngine = "google") {
-  return si<{ result?: { is_completed?: boolean; size?: number; processed_count?: number } }>(
+  return si<{ result?: { is_completed?: boolean; size?: number; processed_count?: number; eta_minutes?: number } }>(
     `/v2/task/${engine}/checker/status`,
     "POST",
     { task_id: taskId }

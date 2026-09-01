@@ -46,16 +46,22 @@ export function useIndexCheck() {
       const taskId = created?.data?.task_id || created?.task_id;
       if (created?.error || !taskId) throw new Error(created?.error || "Could not create index-check task");
 
-      setState((s) => ({ ...s, phase: "polling", progress: "Checking with Google…" }));
-      for (let i = 0; i < 20; i++) {
+      setState((s) => ({ ...s, phase: "polling", progress: "Checking with Google… (background task — can take a few minutes)" }));
+      // SpeedyIndex's checker is a background job that queries Google per URL and
+      // often takes several minutes; poll until it's actually done (generous cap),
+      // surfacing the ETA it reports rather than giving up after ~80s.
+      const deadline = Date.now() + 8 * 60 * 1000;
+      let completed = false;
+      while (Date.now() < deadline) {
         if (cancelled.current) return;
-        await sleep(4000);
+        await sleep(5000);
         const st = await call({ action: "status", taskId, engine });
         const result = st?.data?.result;
-        if (result?.is_completed) break;
+        if (result?.is_completed) { completed = true; break; }
+        const eta = result?.eta_minutes;
         setState((s) => ({
           ...s,
-          progress: `Checking… ${result?.processed_count ?? 0}/${result?.size ?? urls.length}`,
+          progress: `Checking… ${result?.processed_count ?? 0}/${result?.size ?? urls.length}${eta ? ` · ~${eta} min left` : ""}`,
         }));
       }
 
@@ -65,7 +71,7 @@ export function useIndexCheck() {
         phase: "done",
         indexed: r.indexed_links || [],
         unindexed: r.unindexed_links || [],
-        error: null,
+        error: completed ? null : "Still processing on SpeedyIndex — showing partial results. Run the check again shortly for the full report.",
         progress: "",
       });
     } catch (e) {
@@ -101,8 +107,10 @@ export async function checkIndex(
     const created = await call({ action: "create", urls, engine });
     const taskId = created?.data?.task_id || created?.task_id;
     if (created?.error || !taskId) return { indexed: [], unindexed: [], error: created?.error || "create failed" };
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 4000));
+    // SpeedyIndex checks run for minutes; poll until completed (generous cap).
+    const deadline = Date.now() + 8 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 5000));
       const st = await call({ action: "status", taskId, engine });
       if (st?.data?.result?.is_completed) break;
     }
