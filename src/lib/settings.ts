@@ -4,16 +4,19 @@ export type Theme = "light" | "dark" | "system";
 // (per-user) moved to Supabase (see lib/app-settings.ts) — enforcing
 // "admin writes global, users write only their own" needs RLS, which a
 // per-browser localStorage value can't provide.
+export type SerpProviderChoice = "searchapi" | "serpapi";
+
 export interface AppSettings {
   postsPerDomain: number;
   concurrency: number;
   aiDefault: boolean;
   theme: Theme;
-  minIndexedPages: number; // Domain Pages: eligibility threshold (indexed pages)
+  minIndexedPages: number;         // Domain Pages: eligibility threshold (indexed pages)
+  serpProvider: SerpProviderChoice; // Domain Pages: which SERP API to use for counts
 }
 
 const KEY = "sps_settings";
-const DEFAULTS: AppSettings = { postsPerDomain: 3, concurrency: 8, aiDefault: false, theme: "light", minIndexedPages: 30 };
+const DEFAULTS: AppSettings = { postsPerDomain: 3, concurrency: 8, aiDefault: false, theme: "light", minIndexedPages: 30, serpProvider: "searchapi" };
 
 export function getSettings(): AppSettings {
   if (typeof window === "undefined") return DEFAULTS;

@@ -1,20 +1,15 @@
 /**
  * "How many pages does Google index for this domain" — the real site:domain
- * "About N results" count, via SearchApi.io (a Google SERP API). Server-side
- * only so the key stays off the browser.
+ * "About N results" count, across time windows. Server-side only.
  *
- * Supports time windows (Google's Tools → time filter): any time, past 24h,
- * week, month, 3 months, year. Each window is a separate SearchApi call, so a
- * full breakdown = 6 credits per domain (vs 1 for any-time only).
- *
- * Env: SEARCHAPI_KEY
+ * Two interchangeable providers (chosen in Settings, passed per request):
+ *   - "searchapi" → SearchApi.io   (env SEARCHAPI_KEY, ~100 free)
+ *   - "serpapi"   → SerpApi.com     (env SERPAPI_KEY, ~250/mo free)
+ * Both return an estimated total-results count and support Google time filters.
+ * Each window is one API call, so a full breakdown = 5 credits per domain.
  */
 import { normalizeDomain } from "@/lib/http";
 
-const BASE = "https://www.searchapi.io/api/v1/search";
-
-// SearchApi's supported Google time filters (matches Google's own presets — note
-// there is no 3-month preset; Google only offers 24h/week/month/year + custom).
 export const SITE_WINDOWS = ["any", "last_day", "last_week", "last_month", "last_year"] as const;
 export type SiteWindow = (typeof SITE_WINDOWS)[number];
 
@@ -26,24 +21,33 @@ export const WINDOW_LABEL: Record<SiteWindow, string> = {
   last_year: "Past year",
 };
 
+export const SERP_PROVIDERS = ["searchapi", "serpapi"] as const;
+export type SerpProvider = (typeof SERP_PROVIDERS)[number];
+
 export interface SiteCoverage {
   domain: string;
   counts: Partial<Record<SiteWindow, number | null>>;
   error?: string;
 }
 
-async function countForWindow(domain: string, key: string, w: SiteWindow): Promise<number | null> {
-  let params = `engine=google&num=1&q=${encodeURIComponent("site:" + domain)}&api_key=${encodeURIComponent(key)}`;
-  if (w !== "any") params += `&time_period=${w}`;
+// Google tbs value per window (used by SerpApi; SearchApi uses its own token).
+const TBS: Record<Exclude<SiteWindow, "any">, string> = {
+  last_day: "qdr:d",
+  last_week: "qdr:w",
+  last_month: "qdr:m",
+  last_year: "qdr:y",
+};
+
+const isNoResults = (msg: string) => /didn'?t return any results|hasn'?t returned any results|no results/i.test(msg);
+
+/** SearchApi.io — time_period token. */
+async function searchApiCount(domain: string, key: string, w: SiteWindow): Promise<number | null> {
+  let url = `https://www.searchapi.io/api/v1/search?engine=google&num=1&q=${encodeURIComponent("site:" + domain)}&api_key=${encodeURIComponent(key)}`;
+  if (w !== "any") url += `&time_period=${w}`;
   try {
-    const res = await fetch(`${BASE}?${params}`);
+    const res = await fetch(url);
     const j = (await res.json().catch(() => ({}))) as { error?: unknown; search_information?: { total_results?: number } };
-    if (j.error) {
-      // SearchApi returns an error string when Google has ZERO results — that's a
-      // real count of 0 for this window, not a failure.
-      if (/didn'?t return any results|no results/i.test(String(j.error))) return 0;
-      return null;
-    }
+    if (j.error) return isNoResults(String(j.error)) ? 0 : null;
     const t = Number(j.search_information?.total_results ?? 0);
     return Number.isFinite(t) ? t : 0;
   } catch {
@@ -51,18 +55,44 @@ async function countForWindow(domain: string, key: string, w: SiteWindow): Promi
   }
 }
 
-/** Indexed-page counts for a domain across the requested time windows. */
-export async function siteCoverage(rawDomain: string, windows: readonly SiteWindow[]): Promise<SiteCoverage> {
+/** SerpApi.com — Google tbs token. */
+async function serpApiCount(domain: string, key: string, w: SiteWindow): Promise<number | null> {
+  let url = `https://serpapi.com/search.json?engine=google&num=1&q=${encodeURIComponent("site:" + domain)}&api_key=${encodeURIComponent(key)}`;
+  if (w !== "any") url += `&tbs=${encodeURIComponent(TBS[w])}`;
+  try {
+    const res = await fetch(url);
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown; search_information?: { total_results?: number } };
+    if (j.error) return isNoResults(String(j.error)) ? 0 : null;
+    const t = Number(j.search_information?.total_results ?? 0);
+    return Number.isFinite(t) ? t : 0;
+  } catch {
+    return null;
+  }
+}
+
+function providerKey(provider: SerpProvider): string | undefined {
+  return provider === "serpapi" ? process.env.SERPAPI_KEY : process.env.SEARCHAPI_KEY;
+}
+function providerEnvName(provider: SerpProvider): string {
+  return provider === "serpapi" ? "SERPAPI_KEY" : "SEARCHAPI_KEY";
+}
+
+/** Indexed-page counts for a domain across the requested windows, via `provider`. */
+export async function siteCoverage(
+  rawDomain: string,
+  windows: readonly SiteWindow[],
+  provider: SerpProvider = "searchapi",
+): Promise<SiteCoverage> {
   const domain = normalizeDomain(rawDomain);
   if (!domain) return { domain: rawDomain, counts: {}, error: "Empty domain" };
-  const key = process.env.SEARCHAPI_KEY;
-  if (!key) return { domain, counts: {}, error: "SEARCHAPI_KEY not set" };
+  const key = providerKey(provider);
+  if (!key) return { domain, counts: {}, error: `${providerEnvName(provider)} not set` };
 
+  const fn = provider === "serpapi" ? serpApiCount : searchApiCount;
   const counts: Partial<Record<SiteWindow, number | null>> = {};
-  await Promise.all(windows.map(async (w) => { counts[w] = await countForWindow(domain, key, w); }));
-  // Surface an error only if EVERY window failed (likely a key/quota problem).
+  await Promise.all(windows.map(async (w) => { counts[w] = await fn(domain, key, w); }));
   const allFailed = windows.length > 0 && windows.every((w) => counts[w] == null);
-  return { domain, counts, error: allFailed ? "SearchApi request failed (key/quota?)" : undefined };
+  return { domain, counts, error: allFailed ? `${provider} request failed (key/quota?)` : undefined };
 }
 
 /** Back-compat single any-time count. */
@@ -71,7 +101,7 @@ export interface SiteCount {
   count: number | null;
   error?: string;
 }
-export async function siteIndexCount(rawDomain: string): Promise<SiteCount> {
-  const cov = await siteCoverage(rawDomain, ["any"]);
+export async function siteIndexCount(rawDomain: string, provider: SerpProvider = "searchapi"): Promise<SiteCount> {
+  const cov = await siteCoverage(rawDomain, ["any"], provider);
   return { domain: cov.domain, count: cov.counts.any ?? null, error: cov.error };
 }

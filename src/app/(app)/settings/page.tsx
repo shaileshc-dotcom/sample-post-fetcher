@@ -15,6 +15,7 @@ export default function SettingsPage() {
     aiDefault: false,
     theme: "light",
     minIndexedPages: 30,
+    serpProvider: "searchapi",
   });
   const [saved, setSaved] = useState(false);
 
@@ -248,6 +249,17 @@ export default function SettingsPage() {
             onChange={(e) => persist({ ...s, minIndexedPages: Math.max(0, Number(e.target.value)) })}
             className="input w-24 px-3 py-1.5 text-sm mono"
           />
+        </Field>
+
+        <Field label="Domain Pages: SERP provider" hint="Which Google SERP API powers the indexed-page counts. SearchApi (~100/mo free) or SerpApi (~250/mo free). Saved per browser.">
+          <select
+            value={s.serpProvider}
+            onChange={(e) => persist({ ...s, serpProvider: e.target.value as AppSettings["serpProvider"] })}
+            className="input px-3 py-1.5 text-sm"
+          >
+            <option value="searchapi">SearchApi.io</option>
+            <option value="serpapi">SerpApi.com</option>
+          </select>
         </Field>
 
         {globalErr && <p className="text-xs text-[var(--danger)]">{globalErr}</p>}

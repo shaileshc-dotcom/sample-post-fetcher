@@ -41,10 +41,11 @@ export default function IndexAndTasksPage() {
   const covDomains = parseUrls(covRaw);
   const [breakdown, setBreakdown] = useState(false);
   const [minPages, setMinPages] = useState(30);
+  const [provider, setProvider] = useState<"searchapi" | "serpapi">("searchapi");
   const [covResults, setCovResults] = useState<Coverage[]>([]);
   const [covLoading, setCovLoading] = useState(false);
   const [covErr, setCovErr] = useState<string | null>(null);
-  useEffect(() => { setMinPages(getSettings().minIndexedPages); }, []);
+  useEffect(() => { const s = getSettings(); setMinPages(s.minIndexedPages); setProvider(s.serpProvider); }, []);
 
   async function runCoverage() {
     if (!covDomains.length) return;
@@ -52,7 +53,7 @@ export default function IndexAndTasksPage() {
     try {
       const res = await fetch("/api/index-check", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "site-count", domains: covDomains, breakdown }),
+        body: JSON.stringify({ action: "site-count", domains: covDomains, breakdown, provider }),
       });
       const data = await res.json();
       if (data?.error) setCovErr(data.error);
@@ -282,9 +283,9 @@ export default function IndexAndTasksPage() {
             </button>
           </div>
           <p className="text-[11px] text-[var(--muted)] mt-2">
-            Real Google <span className="mono">site:</span> counts via SearchApi.io. Any-time only = <strong>1 credit/domain</strong>; with time breakdown = <strong>{WINDOWS.length} credits/domain</strong>. No SpeedyIndex credits.
+            Real Google <span className="mono">site:</span> counts via <strong>{provider === "serpapi" ? "SerpApi.com" : "SearchApi.io"}</strong> (switch in Settings). Any-time only = <strong>1 credit/domain</strong>; with time breakdown = <strong>{WINDOWS.length} credits/domain</strong>. No SpeedyIndex credits.
             Eligible = Any-time pages ≥ Min pages.
-            {covDomains.length > 0 && <> · This run ≈ <strong>{covDomains.length * (breakdown ? WINDOWS.length : 1)} SearchApi credits</strong>.</>}
+            {covDomains.length > 0 && <> · This run ≈ <strong>{covDomains.length * (breakdown ? WINDOWS.length : 1)} credits</strong>.</>}
           </p>
 
           {covErr && <div className="text-[var(--danger)] text-sm mt-4">{covErr}</div>}

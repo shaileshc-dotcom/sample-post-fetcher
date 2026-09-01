@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import pLimit from "p-limit";
 import { siAccount, siCreateCheck, siStatus, siReport, siIndexStatus, siSubmitIndex, type SearchEngine } from "@/lib/speedyindex";
-import { siteCoverage, SITE_WINDOWS } from "@/lib/serp-count";
+import { siteCoverage, SITE_WINDOWS, SERP_PROVIDERS, type SerpProvider } from "@/lib/serp-count";
 import { createServerClient } from "@/lib/supabase/server";
 import { requireApiRole } from "@/lib/api-guard";
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const gate = await requireApiRole("/index-check");
   if (gate instanceof NextResponse) return gate;
 
-  let body: { action?: string; urls?: string[]; domains?: string[]; breakdown?: boolean; taskId?: string; engine?: SearchEngine; source?: string };
+  let body: { action?: string; urls?: string[]; domains?: string[]; breakdown?: boolean; provider?: string; taskId?: string; engine?: SearchEngine; source?: string };
   try {
     body = await req.json();
   } catch {
@@ -60,9 +60,10 @@ export async function POST(req: NextRequest) {
         if (!domains.length) return NextResponse.json({ error: "No domains provided" }, { status: 400 });
         if (domains.length > 100) return NextResponse.json({ error: "Max 100 domains per run" }, { status: 400 });
         const windows = body.breakdown ? SITE_WINDOWS : (["any"] as const);
+        const provider: SerpProvider = SERP_PROVIDERS.includes(body.provider as SerpProvider) ? (body.provider as SerpProvider) : "searchapi";
         const limit = pLimit(4);
-        const coverage = await Promise.all(domains.map((d) => limit(() => siteCoverage(d, windows))));
-        return NextResponse.json({ coverage });
+        const coverage = await Promise.all(domains.map((d) => limit(() => siteCoverage(d, windows, provider))));
+        return NextResponse.json({ coverage, provider });
       }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });
