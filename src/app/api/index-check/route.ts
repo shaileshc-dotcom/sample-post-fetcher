@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       case "account":
         return NextResponse.json(await siAccount());
       case "create": {
-        const urls = (body.urls || []).map((u) => u.trim()).filter(Boolean);
+        const urls = (body.urls || []).map(normalizeUrl).filter(Boolean);
         if (!urls.length) return NextResponse.json({ error: "No URLs provided" }, { status: 400 });
         if (urls.length > 10000) return NextResponse.json({ error: "Max 10,000 URLs per task" }, { status: 400 });
         return NextResponse.json(await siCreateCheck(urls, engine));
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         if (!body.taskId) return NextResponse.json({ error: "taskId required" }, { status: 400 });
         return NextResponse.json(await siIndexStatus(body.taskId, engine));
       case "submit": {
-        const urls = [...new Set((body.urls || []).map((u) => u.trim()).filter(Boolean))];
+        const urls = [...new Set((body.urls || []).map(normalizeUrl).filter(Boolean))];
         if (!urls.length) return NextResponse.json({ error: "No URLs provided" }, { status: 400 });
         const source = typeof body.source === "string" ? body.source : "manual";
         const submit = await siSubmitIndex(urls, engine);
@@ -56,6 +56,18 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
+}
+
+/**
+ * SpeedyIndex requires fully-qualified URLs — a bare domain (no scheme) is
+ * silently dropped, leaving an "empty list" 413. Prepend https:// so pasted
+ * domains like "example.com" are checked as "https://example.com/".
+ */
+function normalizeUrl(u: string): string {
+  const t = (u || "").trim();
+  if (!t) return "";
+  if (/^https?:\/\//i.test(t)) return t;
+  return "https://" + t.replace(/^\/+/, "");
 }
 
 async function recordTasks(urls: string[], taskId: string, source: string) {

@@ -42,11 +42,14 @@ async function si<T = Record<string, unknown>>(
         continue;
       }
       const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      // Prefer SpeedyIndex's own message (e.g. "Url list is empty", "Too many urls.
+      // Limit 10,000, found N") over our generic status text — far less misleading.
+      const apiMsg = typeof json.message === "string" ? json.message : typeof json.error === "string" ? json.error : null;
       return {
         httpStatus: res.status,
         code: typeof json.code === "number" ? (json.code as number) : res.ok ? 0 : 3,
         data: json as T,
-        error: res.ok ? undefined : httpMessage(res.status),
+        error: res.ok ? undefined : apiMsg || httpMessage(res.status),
       };
     } catch (e) {
       if (attempt < maxAttempts) { await new Promise((r) => setTimeout(r, attempt * 1500)); continue; }
